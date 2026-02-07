@@ -1,0 +1,12 @@
+{
+  "name": "ctrip-web-camp-37",
+  "version": "0.1.0",
+  "description": "E-su hotel booking platform",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
