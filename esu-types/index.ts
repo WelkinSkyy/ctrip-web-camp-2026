@@ -15,209 +15,56 @@
  * - 技术假设：Node.js后端，JWT token认证，数据库如PostgreSQL。
  */
 
-// 1. 数据库表定义 (drizzle-orm格式)
-// 导入drizzle-orm必要模块（假设环境已配置）
-import { pgTable, serial, text, varchar, integer, numeric, timestamp, date, pgEnum, unique, uniqueIndex, foreignKey } from 'drizzle-orm/pg-core';
-import { defineRelations } from 'drizzle-orm';
+export const hotelStatus = ['pending', 'approved', 'rejected', 'offline'] as const;
 
-const hotelStatus = ['pending', 'approved', 'rejected', 'offline'] as const;
+export const bookingStatus = ['pending', 'confirmed', 'cancelled', 'completed'] as const;
 
-const bookingStatus = ['pending', 'confirmed', 'cancelled', 'completed'] as const;
+export const promotionType = ['direct', 'percentage', 'spend_and_save'] as const;
 
-const promotionType = ['direct', 'percentage', 'spend_and_save'] as const;
-
-// 枚举定义：酒店状态
-const hotelStatusEnum = pgEnum('hotel_status', hotelStatus);
-
-// 枚举定义：预订状态
-const bookingStatusEnum = pgEnum('booking_status', bookingStatus);
-
-// 枚举定义：优惠类型（新增：折扣、套餐等）
-const promotionTypeEnum = pgEnum('promotion_type', promotionType);
-
-const timestamps = () => ({
-  createdAt: timestamp().defaultNow().notNull(), // 创建时间
-  updatedAt: timestamp().defaultNow().notNull(), // 更新时间
-  deletedAt: timestamp(), // 软删除时间
-});
-
-// 用户表：存储用户信息，支持多角色（RBAC0基础）
-export const users = pgTable('users', {
-  id: serial().primaryKey(), // 自增主键
-  username: varchar({ length: 50 }).notNull().unique(), // 用户名，唯一
-  password: varchar({ length: 100 }).notNull(), // 加密密码
-  phone: varchar({ length: 20 }), // 手机号，可选
-  email: varchar({ length: 100 }), // 邮箱，可选
-  ...timestamps()
-});
-
-// 酒店表：存储酒店信息
-export const hotels = pgTable('hotels', {
-  id: serial().primaryKey(), // 自增主键
-  nameZh: varchar({ length: 50 }).unique().notNull(), // 酒店中文名
-  nameEn: varchar({ length: 100 }), // 酒店英文名
-  ownerId: integer().notNull(),// 所属商户ID，外键引用users
-  address: text().notNull(), // 地址
-  starRating: integer().notNull(), // 星级，1-5
-  openingDate: date().notNull(), // 开业时间（日期）
-  nearbyAttractions: varchar({ length: 50 }).array(), // 附近景点数组
-  images: text().array(), // 图片URL数组
-  facilities: varchar({ length: 50 }).array(), // 设施数组
-  status: hotelStatusEnum(), // 状态，默认审核中
-  statusDescription: text(), // 状态说明（如拒绝原因）
-  ...timestamps()
-});
-
-// 房型表：酒店下的房型（RoomType更准确，修正原始Room为RoomType）
-export const roomTypes = pgTable('room_types', {
-  id: serial().primaryKey(),
-  hotelId: integer().notNull(), // 所属酒店，外键
-  name: varchar({ length: 100 }).notNull(), // 房型名
-  price: numeric({ precision: 10, scale: 2 }).notNull(), // 基础价格
-  stock: integer().notNull().default(0), // 库存
-  capacity: integer().default(1), // 容纳人数，默认1
-  description: text(), // 描述
-  ...timestamps()
-});
-
-// 优惠表：关联酒店或房型，支持类型（如折扣率）
-export const promotions = pgTable('promotions', {
-  id: serial().primaryKey(),
-  ownerId: integer(),
-  hotelId: integer(), // 可关联酒店，外键可选
-  roomTypeId: integer(), // 可关联房型，外键可选
-  type: promotionTypeEnum().notNull().default('direct'), // 优惠类型
-  value: numeric({ precision: 5, scale: 2 }).notNull(), // 值，如折扣率0.8
-  startDate: date().notNull(), // 开始日期
-  endDate: date().notNull(), // 结束日期
-  description: text(), // 描述，如“节日8折”
-  ...timestamps()
-});
-
-export const roomTypePromotion = pgTable('promotions', {
-  id: serial().primaryKey(),
-  roomTypeId: integer().notNull(),
-  promotionId: integer().notNull(),
-  ...timestamps()
-})
-
-// 预订表：用户预订记录（新增预订系统）
-export const bookings = pgTable('bookings', {
-  id: serial().primaryKey(),
-  userId: integer().notNull(), // 预订用户，外键
-  hotelId: integer().notNull(), // 酒店，外键
-  roomTypeId: integer().notNull(), // 房型，外键
-  checkIn: date().notNull(), // 入住日期
-  checkOut: date().notNull(), // 离店日期
-  totalPrice: numeric({ precision: 2, scale: 8 }).notNull(), // 总价（计算后）
-  status: bookingStatusEnum().notNull().default('pending'), // 状态，默认待确认
-  promotionId: integer(), // 应用的优惠，可选
-  ...timestamps()
-});
-
-const relations = defineRelations({ users, hotels, roomTypes, promotions, roomTypePromotion, bookings }, r => ({
-  users: {
-    hotels: r.many.hotels(),
-    bookings: r.many.bookings(),
-    promotions: r.many.promotions()
-  },
-  hotels: {
-    owner: r.one.users({
-      from: r.hotels.ownerId,
-      to: r.users.id
-    }),
-    roomTypes: r.many.roomTypes(),
-    promotions: r.many.promotions(),
-    bookings: r.many.bookings()
-  },
-  roomTypes: {
-    hotel: r.one.hotels({
-      from: r.roomTypes.hotelId,
-      to: r.hotels.id
-    }),
-    bookings: r.many.bookings(),
-    promotionsId: r.many.roomTypePromotion()
-  },
-  promotions: {
-    hotel: r.one.hotels({
-      from: r.promotions.hotelId,
-      to: r.hotels.id
-    }),
-    owner: r.one.users({
-      from: r.promotions.ownerId,
-      to: r.users.id
-    }),
-    roomTypesId: r.many.roomTypePromotion()
-  },
-  roomTypePromotion: {
-    roomType: r.one.roomTypes({
-      from: r.roomTypePromotion.roomTypeId,
-      to: r.roomTypes.id
-    }),
-    promotion: r.one.promotions({
-      from: r.roomTypePromotion.promotionId,
-      to: r.promotions.id
-    })
-  },
-  bookings: {
-    user: r.one.users({
-      from: r.bookings.userId,
-      to: r.users.id
-    }),
-    hotel: r.one.hotels({
-      from: r.bookings.hotelId,
-      to: r.hotels.id
-    }),
-    roomType: r.one.roomTypes({
-      from: r.bookings.roomTypeId,
-      to: r.roomTypes.id
-    }),
-    promotion: r.one.promotions({
-      from: r.bookings.promotionId,
-      to: r.promotions.id
-    })
-  }
-}));
+export const roleType = ['customer', 'merchant', 'admin'] as const;
 
 // 2. 类型定义 (Valibot schemas)
 // 导入Valibot（假设环境已安装）
 import * as v from 'valibot';
 
-const vTimestamps = () => ({
-  createdAt: v.pipe(v.string(), v.isoTimestamp('无效日期')), // 创建时间
-  updatedAt: v.pipe(v.string(), v.isoTimestamp('无效日期')), // 更新时间
-  deletedAt: v.optional(v.pipe(v.string(), v.isoTimestamp('无效日期'))), // 更新时间
+export const vTimestamps = () => ({
+  createdAt: v.date('无效日期'), // 创建时间
+  updatedAt: v.date('无效日期'), // 更新时间
+  deletedAt: v.nullable(v.date('无效日期')), // 更新时间
 })
 
-const ParamIdSchema = v.pipe(v.string(), v.toNumber(), v.integer());
+export const ParamIdSchema = v.pipe(v.string(), v.toNumber(), v.integer());
 
 // 用户Schema（基于原始，移除password在响应中）
-const UserSchema = v.object({
+export const UserSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 用户ID
   username: v.pipe(v.string(), v.minLength(3, '用户名至少3字符'), v.maxLength(50, '用户名最多50字符')), // 用户名
   password: v.pipe(v.string(), v.minLength(6, '密码至少6位')),
-  phone: v.optional(v.pipe(v.string(), v.minLength(6, '手机号至少6位'))), // 手机号，可选
-  email: v.optional(v.pipe(v.string(), v.email('无效邮箱'))), // 邮箱，可选
+  role: v.picklist(roleType, '无效角色'),
+  phone: v.nullable(v.pipe(v.string(), v.minLength(6, '手机号至少6位'))), // 手机号，可选
+  email: v.nullable(v.pipe(v.string(), v.email('无效邮箱'))), // 邮箱，可选
   ...vTimestamps()
 });
 
+export const JwtSchema = v.pick(UserSchema, ['id', 'role']);
+
 // 用户响应Schema（无password）
-const UserResponseSchema = v.omit(UserSchema, ['password']);
+export const UserResponseSchema = v.omit(UserSchema, ['password']);
 
 // 用户注册Request Schema（无ID、时间，password明文）
-const UserRegisterRequestSchema = v.omit(UserSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt']);
+export const UserRegisterRequestSchema = v.omit(UserSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt']);
 
-const UserRegisterResponseSchema = v.omit(UserSchema, ["password"]);
+export const UserRegisterResponseSchema = v.omit(UserSchema, ["password"]);
 
-const UserLoginRequestSchema = v.pick(UserSchema, ['username', 'password']);
+export const UserLoginRequestSchema = v.pick(UserSchema, ['username', 'password']);
 
-const UserLoginResponseSchema = v.object({
+export const UserLoginResponseSchema = v.object({
   token: v.string(),
   user: UserResponseSchema
 })
 
 // 酒店Schema（基于原始，rooms改为roomTypes array）
-const HotelSchema = v.object({
+export const HotelSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 酒店ID
   nameZh: v.pipe(v.string(), v.minLength(1, '中文名不能为空')), // 中文名
   nameEn: v.optional(v.string()), // 英文名，可选
@@ -234,11 +81,11 @@ const HotelSchema = v.object({
 });
 
 // 酒店创建/更新 Partial Schema
-const PartialHotelSchema = v.partial(HotelSchema);
+export const PartialHotelSchema = v.partial(HotelSchema);
 
-const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status']);
+export const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status']);
 
-const HotelListRequestSchema = v.object({
+export const HotelListRequestSchema = v.object({
   keyword: v.optional(v.string()), // 关键字
   checkIn: v.optional(v.pipe(v.string(), v.isoDate())),
   checkOut: v.optional(v.pipe(v.string(), v.isoDate())),
@@ -249,16 +96,16 @@ const HotelListRequestSchema = v.object({
   page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 }); // Request query: 筛选参数，支持分页
-const HotelListResponseSchema = v.object({ hotels: v.array(HotelSchema), total: v.number(), page: v.number() });
+export const HotelListResponseSchema = v.object({ hotels: v.array(HotelSchema), total: v.number(), page: v.number() });
 
-const HotelAdminListRequestSchema = v.object({
+export const HotelAdminListRequestSchema = v.object({
   status: v.optional(HotelSchema.entries.status),
   page: v.optional(v.number()),
   limit: v.optional(v.number()),
 });
 
 // 房型Schema（基于原始Promotion Schema修正为RoomType）
-const RoomTypeSchema = v.object({
+export const RoomTypeSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')),
   hotelId: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')),
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
@@ -270,10 +117,10 @@ const RoomTypeSchema = v.object({
 });
 
 // 房型创建/更新 Partial
-const PartialRoomTypeSchema = v.partial(RoomTypeSchema);
+export const PartialRoomTypeSchema = v.partial(RoomTypeSchema);
 
 // 优惠Schema（基于原始Room Schema修正，添加type/value）
-const PromotionSchema = v.object({
+export const PromotionSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1)),
   ownerId: v.pipe(v.number(), v.integer(), v.minValue(1)),
   hotelId: v.optional(v.pipe(v.number(), v.integer())),
@@ -287,10 +134,10 @@ const PromotionSchema = v.object({
 });
 
 // 优惠创建/更新 Partial
-const PartialPromotionSchema = v.partial(PromotionSchema);
+export const PartialPromotionSchema = v.partial(PromotionSchema);
 
 // 预订Schema（新增）
-const BookingSchema = v.object({
+export const BookingSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1)),
   userId: v.pipe(v.number(), v.integer(), v.minValue(1)),
   hotelId: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -304,21 +151,21 @@ const BookingSchema = v.object({
 });
 
 // 预订创建 Schema（无ID、时间、status默认pending）
-const BookingCreateSchema = v.omit(BookingSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice']); // totalPrice后端计算
+export const BookingCreateSchema = v.omit(BookingSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice']); // totalPrice后端计算
 
-const BookingListRequestSchema = v.object({
+export const BookingListRequestSchema = v.object({
   status: v.optional(v.picklist(bookingStatus)),
   page: v.optional(v.number()),
   limit: v.optional(v.number()),
 });
 
-const BookingListResponseSchema = v.object({
+export const BookingListResponseSchema = v.object({
   bookings: v.array(BookingSchema),
   total: v.number(),
   page: v.number()
 });
 
-const BookingAdminListRequestSchema = v.object({
+export const BookingAdminListRequestSchema = v.object({
   hotelId: v.optional(v.string()),
   status: v.optional(v.picklist(bookingStatus)),
   page: v.optional(v.number()),

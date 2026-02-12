@@ -16,10 +16,11 @@
   "packageManager": "pnpm@10.28.2",
   "dependencies": {
     "@fastify/jwt": "^10.0.0",
-    "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/fastify": "3.53.0-rc.1",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.4",
     "drizzle-orm": "1.0.0-beta.15-859cf75",
+    "esu-types": "link:../esu-types",
     "fastify": "^5.7.4",
     "fastify-plugin": "^5.1.0",
     "pg": "^8.18.0",
