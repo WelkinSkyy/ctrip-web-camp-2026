@@ -2,18 +2,18 @@
   "name": "esu-service",
   "version": "1.0.0",
   "description": "Ctrip winter camp backend",
-  "main": "main.ts",
+  "keywords": [],
+  "license": "MIT",
+  "author": "WelkinSky_",
   "type": "module",
+  "main": "main.ts",
   "scripts": {
     "start": "node dist/bundle.js",
     "build": "rolldown main.ts --file dist/bundle.js",
     "check": "tsc --noEmit",
-    "dev": "tsx main.ts"
+    "dev": "tsx main.ts",
+    "fmt": "oxfmt"
   },
-  "keywords": [],
-  "author": "WelkinSky_",
-  "license": "MIT",
-  "packageManager": "pnpm@10.28.2",
   "dependencies": {
     "@fastify/jwt": "^10.0.0",
     "@ts-rest/fastify": "3.53.0-rc.1",
@@ -30,8 +30,10 @@
     "@types/node": "^25.2.2",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "1.0.0-beta.15-859cf75",
+    "oxfmt": "^0.32.0",
     "rolldown": "1.0.0-rc.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "packageManager": "pnpm@10.28.2"
 }
