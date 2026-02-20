@@ -67,16 +67,16 @@ export const UserLoginResponseSchema = v.object({
 export const HotelSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 酒店ID
   nameZh: v.pipe(v.string(), v.minLength(1, '中文名不能为空')), // 中文名
-  nameEn: v.optional(v.string()), // 英文名，可选
+  nameEn: v.nullable(v.string()), // 英文名，可选
   ownerId: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 所属商户ID
   address: v.pipe(v.string(), v.minLength(1)), // 地址
   starRating: v.pipe(v.number(), v.integer(), v.minValue(1, '星级至少1'), v.maxValue(5, '星级最多5')), // 星级
   openingDate: v.pipe(v.string(), v.isoDate('无效开业日期')), // 开业日期
-  nearbyAttractions: v.optional(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
-  images: v.optional(v.array(v.pipe(v.string(), v.url('无效URL')))), // 图片
-  facilities: v.optional(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
+  nearbyAttractions: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
+  images: v.nullable(v.array(v.pipe(v.string(), v.url('无效URL')))), // 图片
+  facilities: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
   status: v.picklist(hotelStatus, '无效状态'), // 状态
-  statusDescription: v.optional(v.string()), // 状态说明
+  statusDescription: v.nullable(v.string()), // 状态说明
   ...vTimestamps()
 });
 
@@ -111,8 +111,8 @@ export const RoomTypeSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
   price: v.pipe(v.number(), v.minValue(0, '价格不能为负')),
   stock: v.pipe(v.number(), v.integer(), v.minValue(0, '库存不能为负')),
-  capacity: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  description: v.optional(v.string()),
+  capacity: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  description: v.nullable(v.string()),
   ...vTimestamps()
 });
 
@@ -123,13 +123,13 @@ export const PartialRoomTypeSchema = v.partial(RoomTypeSchema);
 export const PromotionSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1)),
   ownerId: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  hotelId: v.optional(v.pipe(v.number(), v.integer())),
-  roomTypeId: v.optional(v.pipe(v.number(), v.integer())),
+  hotelId: v.nullable(v.pipe(v.number(), v.integer())),
+  roomTypeId: v.nullable(v.pipe(v.number(), v.integer())),
   type: v.picklist(promotionType, '无效优惠类型'),
   value: v.number(), // 如折扣0.8
   startDate: v.pipe(v.string(), v.isoDate()),
   endDate: v.pipe(v.string(), v.isoDate()),
-  description: v.optional(v.string()),
+  description: v.nullable(v.string()),
   ...vTimestamps()
 });
 
@@ -146,7 +146,7 @@ export const BookingSchema = v.object({
   checkOut: v.pipe(v.string(), v.isoDate()),
   totalPrice: v.pipe(v.number(), v.minValue(0)),
   status: v.picklist(bookingStatus, '无效预订状态'),
-  promotionId: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  promotionId: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
   ...vTimestamps()
 });
 
@@ -244,7 +244,7 @@ export const hotelsContract = c.router({
     method: 'PUT',
     path: '/hotels/:id',
     pathParams: v.object({ id: ParamIdSchema }),
-    body: v.partial(HotelSchema), // Request body: 部分更新
+    body: PartialHotelSchema, // Request body: 部分更新
     responses: {
       200: HotelSchema,
     },
@@ -263,7 +263,7 @@ export const hotelsContract = c.router({
     metadata: { permission: ['admin'] },
   },
   reject: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/hotels/:id/reject',
     pathParams: v.object({ id: ParamIdSchema }),
     body: v.object({ rejectReason: v.string() }), // Request: 拒绝原因
@@ -274,7 +274,7 @@ export const hotelsContract = c.router({
     metadata: { permission: ['admin'] },
   },
   offline: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/hotels/:id/offline',
     body: v.any(),
     pathParams: v.object({ id: ParamIdSchema }),
@@ -285,7 +285,7 @@ export const hotelsContract = c.router({
     metadata: { permission: ['admin'] },
   },
   online: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/hotels/:id/online',
     body: v.any(),
     pathParams: v.object({ id: ParamIdSchema }),
@@ -352,7 +352,7 @@ export const roomTypesContract = c.router({
     metadata: { permission: null },
   },
   update: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/room-types/:id',
     pathParams: v.object({ id: ParamIdSchema }),
     body: PartialRoomTypeSchema,
@@ -409,7 +409,7 @@ export const promotionsContract = c.router({
     metadata: { permission: '无' },
   },
   update: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/promotions/:id',
     pathParams: v.object({ id: ParamIdSchema }),
     body: PartialPromotionSchema,
@@ -483,7 +483,7 @@ export const bookingsContract = c.router({
     metadata: { permission: ['customer', 'merchant', 'admin'] },
   },
   confirm: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/bookings/:id/confirm',
     body: v.any(),
     pathParams: v.object({ id: v.string() }),
@@ -494,7 +494,7 @@ export const bookingsContract = c.router({
     metadata: { permission: ['merchant', 'admin'] },
   },
   cancel: {
-    method: 'PATCH',
+    method: 'PUT',
     path: '/bookings/:id/cancel',
     body: v.any(),
     pathParams: v.object({ id: v.string() }),

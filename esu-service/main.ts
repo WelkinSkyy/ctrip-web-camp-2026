@@ -1,7 +1,17 @@
 // main.ts
+import dotenv from 'dotenv'
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import { routerPlugin } from './router.js';
+import fastifyPrintRoutes from 'fastify-print-routes'
+// PostgreSQL 连接池
+import { Pool } from 'pg';
+// Drizzle ORM PostgreSQL 驱动
+import { drizzle } from 'drizzle-orm/node-postgres';
+import {relations} from './schema.js'
+import { createRouter } from './router-factory.js';
+
+dotenv.config()
 
 const app = Fastify({ logger: true });
 
@@ -32,13 +42,32 @@ app.addHook('onRequest', async (request, reply) => {
   }
 });
 
+/**
+ * PostgreSQL 连接池配置
+ * 使用环境变量 DATABASE_URL 获取连接字符串
+ */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+/**
+ * Drizzle ORM 实例
+ * 配置日志输出便于开发调试
+ */
+const db = drizzle({
+  client: pool,
+  logger: process.env.NODE_ENV === 'development', // 开发环境启用日志
+  relations,
+});
+
 // 注册 ts-rest 路由插件
-app.register(routerPlugin);
+await app.register(fastifyPrintRoutes);
+app.register(createRouter(db));
 
 const start = async () => {
   try {
-    await app.listen({ port: PORT });
-    app.log.info(`服务器已启动，监听端口 $PORT`);
+    await app.listen({ port: PORT, host: '0.0.0.0' });
+    app.log.info(`服务器已启动，监听端口 ${PORT}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

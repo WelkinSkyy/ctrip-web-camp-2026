@@ -198,8 +198,9 @@ export const roomTypes = pgTable('room_types', {
     .references(() => hotels.id),
   name: varchar('name', { length: 100 }).notNull(),
   price: numeric('price', {
-    precision: 10,
-    scale: 2,
+    mode: 'number',
+    precision: 2,
+    scale: 10,
   }).notNull(),
   stock: integer('stock').notNull().default(0),
   capacity: integer('capacity').default(1),
@@ -226,7 +227,7 @@ export const roomTypes = pgTable('room_types', {
  */
 export const promotions = pgTable('promotions', {
   id: serial('id').primaryKey(),
-  ownerId: integer('owner_id').references(() => users.id),
+  ownerId: integer('owner_id').references(() => users.id).notNull(),
   hotelId: integer('hotel_id').references(() => hotels.id),
   roomTypeId: integer('room_type_id').references(
     () => roomTypes.id,
@@ -235,8 +236,9 @@ export const promotions = pgTable('promotions', {
     .notNull()
     .default('direct'),
   value: numeric('value', {
-    precision: 5,
-    scale: 2,
+    mode: 'number',
+    precision: 2,
+    scale: 10,
   }).notNull(),
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
@@ -300,8 +302,9 @@ export const bookings = pgTable('bookings', {
   checkIn: date('check_in').notNull(),
   checkOut: date('check_out').notNull(),
   totalPrice: numeric('total_price', {
-    precision: 10,
-    scale: 2,
+    mode: 'number',
+    precision: 2,
+    scale: 10,
   }).notNull(),
   status: bookingStatusEnum('status')
     .notNull()

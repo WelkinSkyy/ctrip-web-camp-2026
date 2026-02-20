@@ -8,8 +8,8 @@
   "type": "module",
   "main": "main.ts",
   "scripts": {
-    "start": "node dist/bundle.js",
-    "build": "rolldown main.ts --file dist/bundle.js",
+    "start": "node dist/main.js",
+    "build": "rolldown -c",
     "check": "tsc --noEmit",
     "dev": "tsx main.ts",
     "fmt": "oxfmt"
@@ -23,15 +23,20 @@
     "esu-types": "link:../esu-types",
     "fastify": "^5.7.4",
     "fastify-plugin": "^5.1.0",
+    "fastify-print-routes": "^5.0.1",
     "pg": "^8.18.0",
+    "rolldown-plugin-dts": "^0.22.1",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
     "@types/node": "^25.2.2",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "1.0.0-beta.15-859cf75",
+    "jest": "^30.2.0",
     "oxfmt": "^0.32.0",
     "rolldown": "1.0.0-rc.3",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
