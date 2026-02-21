@@ -8,14 +8,7 @@
  */
 
 import 'dotenv/config';
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-} from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';
 import jwt from '@fastify/jwt';
 import bcrypt from 'bcryptjs';
@@ -31,14 +24,7 @@ import { contract } from 'esu-types';
 import { createRouter } from './router-factory.js';
 
 // 导入数据库 Schema
-import {
-  users,
-  hotels,
-  roomTypes,
-  promotions,
-  bookings,
-  relations,
-} from './schema.js';
+import { users, hotels, roomTypes, promotions, bookings, relations } from './schema.js';
 
 // =============================================================================
 // 测试配置
@@ -48,9 +34,7 @@ const JWT_SECRET = 'test_secret_key';
 
 // 测试数据库连接
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/db',
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/db',
 });
 const db = drizzle({
   client: pool,
@@ -90,9 +74,7 @@ const tokens = {
  * 这个适配器允许我们在不启动实际服务器的情况下，
  * 使用 ts-rest 的类型安全客户端进行 API 测试
  */
-const createTestClient = (
-  fastifyApp: ReturnType<typeof Fastify>,
-) => {
+const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
   // 自定义 API fetcher 函数，使用 Fastify 的 inject 方法
   // ts-rest 的 clientArgs.api 参数格式
   type ApiFetcherArgs = {
@@ -100,12 +82,7 @@ const createTestClient = (
     path: string;
     method: string;
     headers: Record<string, string>;
-    body:
-      | FormData
-      | URLSearchParams
-      | string
-      | null
-      | undefined;
+    body: FormData | URLSearchParams | string | null | undefined;
     rawBody: unknown;
     rawQuery: unknown;
     contentType: string | undefined;
@@ -116,19 +93,10 @@ const createTestClient = (
     const { path, method, headers, body } = args;
     // 使用 Fastify inject 发送请求
     const response = await fastifyApp.inject({
-      method: method as
-        | 'GET'
-        | 'POST'
-        | 'PUT'
-        | 'DELETE'
-        | 'PATCH',
+      method: method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
       url: path,
       headers,
-      body: body
-        ? typeof body === 'string'
-          ? JSON.parse(body)
-          : body
-        : undefined,
+      body: body ? (typeof body === 'string' ? JSON.parse(body) : body) : undefined,
     });
 
     // 返回 ts-rest 期望的格式
@@ -186,10 +154,7 @@ const cleanDatabase = async () => {
 
 /** 准备测试数据 */
 const seedTestData = async () => {
-  const hashedPassword = await bcrypt.hash(
-    'password123',
-    10,
-  );
+  const hashedPassword = await bcrypt.hash('password123', 10);
 
   // 创建用户
   const [admin, merchant, customer] = await db
@@ -213,10 +178,7 @@ const seedTestData = async () => {
     ])
     .returning();
 
-  if (!admin || !merchant || !customer)
-    throw new Error(
-      'get error when seedTestData insert users',
-    );
+  if (!admin || !merchant || !customer) throw new Error('get error when seedTestData insert users');
 
   // 创建酒店
   const [hotel, pendingHotel] = await db
@@ -241,8 +203,7 @@ const seedTestData = async () => {
     ])
     .returning();
 
-  if (!hotel || !pendingHotel)
-    throw new Error('get error when seedTestData hotels');
+  if (!hotel || !pendingHotel) throw new Error('get error when seedTestData hotels');
 
   // 创建房型
   const [roomType] = await db
@@ -257,8 +218,7 @@ const seedTestData = async () => {
     ])
     .returning();
 
-  if (!roomType)
-    throw new Error('get error when seedTestData roomType');
+  if (!roomType) throw new Error('get error when seedTestData roomType');
 
   // 创建优惠
   const [promotion] = await db
@@ -275,10 +235,7 @@ const seedTestData = async () => {
     ])
     .returning();
 
-  if (!promotion)
-    throw new Error(
-      'get error when seedTestData promotion',
-    );
+  if (!promotion) throw new Error('get error when seedTestData promotion');
 
   // 创建预订
   const [booking] = await db
@@ -296,8 +253,7 @@ const seedTestData = async () => {
     ])
     .returning();
 
-  if (!booking)
-    throw new Error('get error when eedTestData');
+  if (!booking) throw new Error('get error when eedTestData');
 
   testData = {
     admin,
@@ -333,14 +289,8 @@ beforeAll(async () => {
 
   // 生成 Token
   tokens.admin = createToken(testData.admin.id, 'admin');
-  tokens.merchant = createToken(
-    testData.merchant.id,
-    'merchant',
-  );
-  tokens.customer = createToken(
-    testData.customer.id,
-    'customer',
-  );
+  tokens.merchant = createToken(testData.merchant.id, 'merchant');
+  tokens.customer = createToken(testData.customer.id, 'customer');
 });
 
 afterAll(async () => {
@@ -354,14 +304,8 @@ beforeEach(async () => {
 
   // 重新生成 Token（因为数据已重置）
   tokens.admin = createToken(testData.admin.id, 'admin');
-  tokens.merchant = createToken(
-    testData.merchant.id,
-    'merchant',
-  );
-  tokens.customer = createToken(
-    testData.customer.id,
-    'customer',
-  );
+  tokens.merchant = createToken(testData.merchant.id, 'merchant');
+  tokens.customer = createToken(testData.customer.id, 'customer');
 });
 
 // =============================================================================
@@ -492,9 +436,7 @@ describe('酒店模块', () => {
 
       expect(result.status).toBe(200);
       if (result.status === 200) {
-        expect(result.body.hotels.length).toBeGreaterThan(
-          0,
-        );
+        expect(result.body.hotels.length).toBeGreaterThan(0);
       }
     });
   });
@@ -592,10 +534,7 @@ describe('酒店模块', () => {
 
   describe('PUT /hotels/:id/online', () => {
     it('管理员恢复上线', async () => {
-      await db
-        .update(hotels)
-        .set({ status: 'offline' })
-        .where(eq(hotels.id, testData.hotel.id));
+      await db.update(hotels).set({ status: 'offline' }).where(eq(hotels.id, testData.hotel.id));
 
       const result = await client.hotels.online({
         params: { id: String(testData.hotel.id) },
@@ -829,10 +768,7 @@ describe('预订模块', () => {
     });
 
     it('库存不足返回400', async () => {
-      await db
-        .update(roomTypes)
-        .set({ stock: 0 })
-        .where(eq(roomTypes.id, testData.roomType.id));
+      await db.update(roomTypes).set({ stock: 0 }).where(eq(roomTypes.id, testData.roomType.id));
 
       const result = await client.bookings.create({
         body: {
@@ -905,10 +841,7 @@ describe('预订模块', () => {
     });
 
     it('非pending状态返回400', async () => {
-      await db
-        .update(bookings)
-        .set({ status: 'confirmed' })
-        .where(eq(bookings.id, testData.booking.id));
+      await db.update(bookings).set({ status: 'confirmed' }).where(eq(bookings.id, testData.booking.id));
 
       const result = await client.bookings.confirm({
         params: { id: String(testData.booking.id) },

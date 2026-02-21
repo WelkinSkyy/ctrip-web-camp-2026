@@ -13,10 +13,7 @@ import { createRouter } from './router-factory.js';
 const app = Fastify({ logger: true });
 
 // 注册 JWT 插件
-if (process.env.JWT_SECRET === undefined)
-  throw Error(
-    'Esu need a valid secret for jwt verification.',
-  );
+if (process.env.JWT_SECRET === undefined) throw Error('Esu need a valid secret for jwt verification.');
 
 const PORT = parseInt(process.env.ESU_PORT ?? '3000');
 

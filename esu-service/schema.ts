@@ -50,10 +50,7 @@ import {
  * - rejected: 审核未通过（需要修改后重新提交）
  * - offline: 已下线（管理员操作，可恢复）
  */
-export const hotelStatusEnum = pgEnum(
-  'hotel_status',
-  hotelStatus,
-);
+export const hotelStatusEnum = pgEnum('hotel_status', hotelStatus);
 
 /**
  * 预订状态枚举
@@ -62,10 +59,7 @@ export const hotelStatusEnum = pgEnum(
  * - cancelled: 已取消（用户/商户/管理员取消）
  * - completed: 已完成（用户已入住并退房）
  */
-export const bookingStatusEnum = pgEnum(
-  'booking_status',
-  bookingStatus,
-);
+export const bookingStatusEnum = pgEnum('booking_status', bookingStatus);
 
 /**
  * 优惠类型枚举
@@ -73,10 +67,7 @@ export const bookingStatusEnum = pgEnum(
  * - percentage: 百分比折扣（如打8折）
  * - spend_and_save: 满减优惠（如满500减50）
  */
-export const promotionTypeEnum = pgEnum(
-  'promotion_type',
-  promotionType,
-);
+export const promotionTypeEnum = pgEnum('promotion_type', promotionType);
 
 /**
  * 用户角色枚举
@@ -125,9 +116,7 @@ const timestamps = () => ({
  */
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  username: varchar('username', { length: 50 })
-    .notNull()
-    .unique(),
+  username: varchar('username', { length: 50 }).notNull().unique(),
   password: varchar('password', { length: 100 }).notNull(),
   role: roleTypeEnum('role').notNull(),
   phone: varchar('phone', { length: 20 }),
@@ -157,9 +146,7 @@ export const users = pgTable('users', {
  */
 export const hotels = pgTable('hotels', {
   id: serial('id').primaryKey(),
-  nameZh: varchar('name_zh', { length: 50 })
-    .unique()
-    .notNull(),
+  nameZh: varchar('name_zh', { length: 50 }).unique().notNull(),
   nameEn: varchar('name_en', { length: 100 }),
   ownerId: integer('owner_id')
     .notNull()
@@ -172,9 +159,7 @@ export const hotels = pgTable('hotels', {
   }).array(),
   images: text('images').array(),
   facilities: varchar('facilities', { length: 50 }).array(),
-  status: hotelStatusEnum('status')
-    .notNull()
-    .default('pending'),
+  status: hotelStatusEnum('status').notNull().default('pending'),
   statusDescription: text('status_description'),
   ...timestamps(),
 });
@@ -234,12 +219,8 @@ export const promotions = pgTable('promotions', {
     .references(() => users.id)
     .notNull(),
   hotelId: integer('hotel_id').references(() => hotels.id),
-  roomTypeId: integer('room_type_id').references(
-    () => roomTypes.id,
-  ),
-  type: promotionTypeEnum('type')
-    .notNull()
-    .default('direct'),
+  roomTypeId: integer('room_type_id').references(() => roomTypes.id),
+  type: promotionTypeEnum('type').notNull().default('direct'),
   value: numeric('value', {
     mode: 'number',
     precision: 10,
@@ -262,19 +243,16 @@ export const promotions = pgTable('promotions', {
  * - roomTypeId: 房型ID，外键
  * - promotionId: 优惠ID，外键
  */
-export const roomTypePromotion = pgTable(
-  'room_type_promotion',
-  {
-    id: serial('id').primaryKey(),
-    roomTypeId: integer('room_type_id')
-      .notNull()
-      .references(() => roomTypes.id),
-    promotionId: integer('promotion_id')
-      .notNull()
-      .references(() => promotions.id),
-    ...timestamps(),
-  },
-);
+export const roomTypePromotion = pgTable('room_type_promotion', {
+  id: serial('id').primaryKey(),
+  roomTypeId: integer('room_type_id')
+    .notNull()
+    .references(() => roomTypes.id),
+  promotionId: integer('promotion_id')
+    .notNull()
+    .references(() => promotions.id),
+  ...timestamps(),
+});
 
 /**
  * 预订表 (bookings)
@@ -311,12 +289,8 @@ export const bookings = pgTable('bookings', {
     precision: 10,
     scale: 2,
   }).notNull(),
-  status: bookingStatusEnum('status')
-    .notNull()
-    .default('pending'),
-  promotionId: integer('promotion_id').references(
-    () => promotions.id,
-  ),
+  status: bookingStatusEnum('status').notNull().default('pending'),
+  promotionId: integer('promotion_id').references(() => promotions.id),
   ...timestamps(),
 });
 
