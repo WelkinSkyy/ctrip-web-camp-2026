@@ -7,7 +7,7 @@
  * - 测试完整的 API 流程
  */
 
-import 'dotenv/config'
+import 'dotenv/config';
 import {
   describe,
   it,
@@ -25,9 +25,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { initClient } from '@ts-rest/core';
 
 // 导入 ts-rest 契约
-import {
-  contract,
-} from 'esu-types';
+import { contract } from 'esu-types';
 
 // 导入真正的路由处理器工厂
 import { createRouter } from './router-factory.js';
@@ -92,21 +90,45 @@ const tokens = {
  * 这个适配器允许我们在不启动实际服务器的情况下，
  * 使用 ts-rest 的类型安全客户端进行 API 测试
  */
-const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
+const createTestClient = (
+  fastifyApp: ReturnType<typeof Fastify>,
+) => {
   // 自定义 API fetcher 函数，使用 Fastify 的 inject 方法
   // ts-rest 的 clientArgs.api 参数格式
-  const apiFetcher = async ({ path, method, headers, body }: {
+  type ApiFetcherArgs = {
+    route: unknown;
     path: string;
     method: string;
     headers: Record<string, string>;
-    body: string | undefined;
-  }) => {
+    body:
+      | FormData
+      | URLSearchParams
+      | string
+      | null
+      | undefined;
+    rawBody: unknown;
+    rawQuery: unknown;
+    contentType: string | undefined;
+    fetchOptions?: unknown;
+    validateResponse?: boolean;
+  };
+  const apiFetcher = async (args: ApiFetcherArgs) => {
+    const { path, method, headers, body } = args;
     // 使用 Fastify inject 发送请求
     const response = await fastifyApp.inject({
-      method: method as any,
+      method: method as
+        | 'GET'
+        | 'POST'
+        | 'PUT'
+        | 'DELETE'
+        | 'PATCH',
       url: path,
       headers,
-      body: body ? JSON.parse(body) : undefined,
+      body: body
+        ? typeof body === 'string'
+          ? JSON.parse(body)
+          : body
+        : undefined,
     });
 
     // 返回 ts-rest 期望的格式
@@ -123,7 +145,7 @@ const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
   // 使用 api 参数提供自定义 fetcher
   return initClient(contract, {
     baseUrl: 'http://localhost', // 提供 base URL
-    api: apiFetcher as any, // ts-rest 使用 api 参数而不是 customFetch
+    api: apiFetcher, // ts-rest 使用 api 参数而不是 customFetch
   });
 };
 
@@ -470,7 +492,9 @@ describe('酒店模块', () => {
 
       expect(result.status).toBe(200);
       if (result.status === 200) {
-        expect(result.body.hotels.length).toBeGreaterThan(0);
+        expect(result.body.hotels.length).toBeGreaterThan(
+          0,
+        );
       }
     });
   });

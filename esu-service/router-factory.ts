@@ -56,20 +56,41 @@ export const createRouter = (db: DbInstance) => {
 
   // ==================== 辅助函数 ====================
 
-  /** 权限检查 */
+  /**
+   * 创建错误响应
+   * 由于契约中已定义 commonResponses (400, 401, 403, 404, 500)，
+   * ts-rest 可以正确推断这些状态码的响应类型
+   */
+  const errorResponse = (
+    status: 400 | 401 | 403 | 404 | 500,
+    message: string,
+  ) => ({
+    status,
+    body: { message } as const,
+  });
+
+  /** 权限检查 - 返回错误对象或用户信息 */
   const checkPermission = async (
     request: FastifyRequest,
-    permissions: readonly (typeof roleType)[number][] | null,
+    permissions:
+      | readonly (typeof roleType)[number][]
+      | null
+      | string[],
   ) => {
-    if (permissions === null)
-      return null;
-    await request.jwtVerify()
+    if (permissions === null) return null;
+    await request.jwtVerify();
     const parsed = v.parse(JwtSchema, request.user);
-    if (!permissions) return parsed;
-    if (!permissions.includes(parsed.role)) {
-      throw new Error('无权限：您的角色无权访问此接口');
+    // 类型断言：permissions 可能是 string[]，需要转换为角色数组
+    const perms =
+      permissions as readonly (typeof roleType)[number][];
+    if (!perms.includes(parsed.role)) {
+      return {
+        error: true,
+        status: 403,
+        message: '无权限：您的角色无权访问此接口',
+      } as const;
     }
-    return parsed;
+    return { ...parsed, error: false } as const;
   };
 
   /** 移除密码字段 */
@@ -105,7 +126,6 @@ export const createRouter = (db: DbInstance) => {
   ) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-
     return db.query.promotions.findMany({
       where: {
         startDate: { lte: today },
@@ -137,8 +157,8 @@ export const createRouter = (db: DbInstance) => {
           password: hashedPassword,
         })
         .returning();
-
-      if (!newUser) throw new Error('用户创建失败');
+      if (!newUser)
+        return errorResponse(500, '用户创建失败');
       return { status: 201, body: omitPassword(newUser) };
     },
 
@@ -147,7 +167,6 @@ export const createRouter = (db: DbInstance) => {
       const user = await db.query.users.findFirst({
         where: { username: { eq: body.username } },
       });
-
       if (
         !user ||
         !(await bcrypt.compare(
@@ -155,10 +174,10 @@ export const createRouter = (db: DbInstance) => {
           user.password,
         ))
       ) {
-        throw new Error('用户名或密码错误');
+        return errorResponse(401, '用户名或密码错误');
       }
-      if (user.deletedAt) throw new Error('该账号已被禁用');
-
+      if (user.deletedAt)
+        return errorResponse(403, '该账号已被禁用');
       const token = app.jwt.sign({
         id: user.id,
         role: user.role,
@@ -170,16 +189,20 @@ export const createRouter = (db: DbInstance) => {
     },
 
     me: async ({ request }) => {
-      const jwt = await checkPermission(request, usersContract.me.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        usersContract.me.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const user = await db.query.users.findFirst({
-        where: { id: { eq: jwt!.id } },
+        where: { id: { eq: jwt.id } },
       });
-
-      if (!user) throw new Error('用户不存在');
-      if (user.deletedAt) throw new Error('该账号已被禁用');
-
+      if (!user) return errorResponse(404, '用户不存在');
+      if (user.deletedAt)
+        return errorResponse(403, '该账号已被禁用');
       return { status: 200, body: omitPassword(user) };
     },
   });
@@ -188,20 +211,20 @@ export const createRouter = (db: DbInstance) => {
 
   const hotelsRouter = s.router(hotelsContract, {
     create: async ({ body, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.create.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.create.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       if (jwt.role === 'merchant') body.ownerId = jwt.id;
-
       const owner = await db.query.users.findFirst({
         where: { id: { eq: body.ownerId } },
       });
-
-      if (!owner || owner.role !== 'merchant') {
-        throw new Error('无效的所有者');
-      }
-
+      if (!owner || owner.role !== 'merchant')
+        return errorResponse(400, '无效的所有者');
       const [newHotel] = await db
         .insert(hotels)
         .values({
@@ -209,8 +232,8 @@ export const createRouter = (db: DbInstance) => {
           status: 'pending',
         })
         .returning();
-
-      if (!newHotel) throw new Error('酒店创建失败');
+      if (!newHotel)
+        return errorResponse(500, '酒店创建失败');
       return { status: 201, body: newHotel };
     },
 
@@ -218,7 +241,6 @@ export const createRouter = (db: DbInstance) => {
       const page = query.page || 1;
       const limit = query.limit || 10;
       const offset = (page - 1) * limit;
-
       const whereCondition: any = {
         deletedAt: { isNull: true },
         status: { eq: 'approved' },
@@ -275,7 +297,6 @@ export const createRouter = (db: DbInstance) => {
         .where(
           sql`${hotels.deletedAt} IS NULL AND ${hotels.status} = 'approved'`,
         );
-
       return {
         status: 200,
         body: {
@@ -308,8 +329,7 @@ export const createRouter = (db: DbInstance) => {
           },
         },
       });
-
-      if (!hotel) throw new Error('酒店不存在');
+      if (!hotel) return errorResponse(404, '酒店不存在');
 
       if (hotel.roomTypes?.length) {
         for (const rt of hotel.roomTypes) {
@@ -330,58 +350,63 @@ export const createRouter = (db: DbInstance) => {
           );
         }
       }
-
       return { status: 200, body: hotel };
     },
 
     update: async ({ params, body, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.update.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.update.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const hotel = await db.query.hotels.findFirst({
         where: { id: { eq: params.id } },
       });
-
-      if (!hotel) throw new Error('酒店不存在');
+      if (!hotel) return errorResponse(404, '酒店不存在');
       if (
         jwt.role === 'merchant' &&
         hotel.ownerId !== jwt.id
-      ) {
-        throw new Error('无权限修改此酒店');
-      }
-
+      )
+        return errorResponse(403, '无权限修改此酒店');
       const [updated] = await db
         .update(hotels)
         .set({ ...body, updatedAt: new Date() })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('更新错误');
-
+      if (!updated) return errorResponse(500, '更新错误');
       return { status: 200, body: updated };
     },
 
     approve: async ({ params, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.approve.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.approve.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const [updated] = await db
         .update(hotels)
         .set({ status: 'approved', updatedAt: new Date() })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('酒店不存在');
+      if (!updated) return errorResponse(404, '酒店不存在');
       return { status: 200, body: updated };
     },
 
     reject: async ({ params, body, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.reject.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.reject.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const [updated] = await db
         .update(hotels)
         .set({
@@ -391,55 +416,62 @@ export const createRouter = (db: DbInstance) => {
         })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('酒店不存在');
+      if (!updated) return errorResponse(404, '酒店不存在');
       return { status: 200, body: updated };
     },
 
     offline: async ({ params, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.offline.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.offline.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const [updated] = await db
         .update(hotels)
         .set({ status: 'offline', updatedAt: new Date() })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('酒店不存在');
+      if (!updated) return errorResponse(404, '酒店不存在');
       return { status: 200, body: updated };
     },
 
     online: async ({ params, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.online.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.online.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const [updated] = await db
         .update(hotels)
         .set({ status: 'approved', updatedAt: new Date() })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('酒店不存在');
+      if (!updated) return errorResponse(404, '酒店不存在');
       return { status: 200, body: updated };
     },
 
     adminList: async ({ query, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.adminList.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.adminList.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const page = query.page || 1;
       const limit = query.limit || 10;
-
       const whereCondition: any = {
         deletedAt: { isNull: true },
       };
       if (query.status)
         whereCondition.status = { eq: query.status };
-
       const hotelList = await db.query.hotels.findMany({
         where: whereCondition,
         with: {
@@ -449,7 +481,6 @@ export const createRouter = (db: DbInstance) => {
         offset: (page - 1) * limit,
         orderBy: { createdAt: 'desc' },
       });
-
       return {
         status: 200,
         body: {
@@ -461,13 +492,16 @@ export const createRouter = (db: DbInstance) => {
     },
 
     merchantList: async ({ query, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.merchantList.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.merchantList.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const page = query.page || 1;
       const limit = query.limit || 10;
-
       const hotelList = await db.query.hotels.findMany({
         where: {
           ownerId: { eq: jwt.id },
@@ -477,7 +511,6 @@ export const createRouter = (db: DbInstance) => {
         offset: (page - 1) * limit,
         orderBy: { createdAt: 'desc' },
       });
-
       return {
         status: 200,
         body: {
@@ -489,16 +522,22 @@ export const createRouter = (db: DbInstance) => {
     },
 
     delete: async ({ params, request }) => {
-      const jwt = await checkPermission(request, hotelsContract.delete.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        hotelsContract.delete.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       await db
         .update(hotels)
         .set({ deletedAt: new Date() })
         .where(sql`${hotels.id} = ${Number(params.id)}`);
-
-      return { status: 200, body: { message: 'Deleted' } };
+      return {
+        status: 200,
+        body: { message: 'Deleted' as const },
+      };
     },
   });
 
@@ -506,24 +545,27 @@ export const createRouter = (db: DbInstance) => {
 
   const roomTypesRouter = s.router(roomTypesContract, {
     create: async ({ body, request }) => {
-      const jwt = await checkPermission(request, roomTypesContract.create.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        roomTypesContract.create.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const hotel = await db.query.hotels.findFirst({
         where: {
           id: { eq: body.hotelId },
           deletedAt: { isNull: true },
         },
       });
-
-      if (!hotel) throw new Error('酒店不存在');
-
+      if (!hotel) return errorResponse(404, '酒店不存在');
       const [newRoomType] = await db
         .insert(roomTypes)
         .values(body)
         .returning();
-      if (!newRoomType) throw new Error('创建错误');
+      if (!newRoomType)
+        return errorResponse(500, '创建错误');
       return { status: 201, body: newRoomType };
     },
 
@@ -537,67 +579,70 @@ export const createRouter = (db: DbInstance) => {
           hotel: { columns: { id: true, nameZh: true } },
         },
       });
-
-      if (!roomType) throw new Error('房型不存在');
+      if (!roomType)
+        return errorResponse(404, '房型不存在');
       return { status: 200, body: roomType };
     },
 
     update: async ({ params, body, request }) => {
-      const jwt = await checkPermission(request, roomTypesContract.update.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        roomTypesContract.update.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const rt = await db.query.roomTypes.findFirst({
         where: { id: { eq: params.id } },
       });
-      if (!rt) throw new Error('房型不存在');
-
+      if (!rt) return errorResponse(404, '房型不存在');
       const hotel = await db.query.hotels.findFirst({
         where: { id: { eq: rt.hotelId } },
       });
       if (
         jwt.role === 'merchant' &&
         hotel?.ownerId !== jwt.id
-      ) {
-        throw new Error('无权限修改此房型');
-      }
-
+      )
+        return errorResponse(403, '无权限修改此房型');
       const [updated] = await db
         .update(roomTypes)
         .set({ ...body, updatedAt: new Date() })
         .where(sql`${roomTypes.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('更新错误');
+      if (!updated) return errorResponse(500, '更新错误');
       return { status: 200, body: updated };
     },
 
     delete: async ({ params, request }) => {
-      const jwt = await checkPermission(request, roomTypesContract.delete.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        roomTypesContract.delete.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const rt = await db.query.roomTypes.findFirst({
         where: { id: { eq: params.id } },
       });
-      if (!rt) throw new Error('房型不存在');
-
+      if (!rt) return errorResponse(404, '房型不存在');
       const hotel = await db.query.hotels.findFirst({
         where: { id: { eq: rt.hotelId } },
       });
       if (
         jwt.role === 'merchant' &&
         hotel?.ownerId !== jwt.id
-      ) {
-        throw new Error('无权限删除此房型');
-      }
-
+      )
+        return errorResponse(403, '无权限删除此房型');
       await db
         .update(roomTypes)
         .set({ deletedAt: new Date() })
         .where(sql`${roomTypes.id} = ${params.id}`);
-
-      return { status: 200, body: { message: 'Deleted' } };
+      return {
+        status: 200,
+        body: { message: 'Deleted' as const },
+      };
     },
   });
 
@@ -605,16 +650,19 @@ export const createRouter = (db: DbInstance) => {
 
   const promotionsRouter = s.router(promotionsContract, {
     create: async ({ body, request }) => {
-      const jwt = await checkPermission(request, promotionsContract.create.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        promotionsContract.create.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const [newPromo] = await db
         .insert(promotions)
         .values({ ...body, ownerId: jwt.id })
         .returning();
-
-      if (!newPromo) throw new Error('创建错误');
+      if (!newPromo) return errorResponse(500, '创建错误');
       return { status: 201, body: newPromo };
     },
 
@@ -630,7 +678,6 @@ export const createRouter = (db: DbInstance) => {
         whereCondition.roomTypeId = {
           eq: Number(query.roomTypeId),
         };
-
       const promoList = await db.query.promotions.findMany({
         where: whereCondition,
         with: {
@@ -639,7 +686,6 @@ export const createRouter = (db: DbInstance) => {
         },
         orderBy: { createdAt: 'desc' },
       });
-
       return { status: 200, body: promoList };
     },
 
@@ -655,59 +701,63 @@ export const createRouter = (db: DbInstance) => {
           owner: { columns: { id: true, username: true } },
         },
       });
-
-      if (!promo) throw new Error('优惠不存在');
+      if (!promo) return errorResponse(404, '优惠不存在');
       return { status: 200, body: promo };
     },
 
     update: async ({ params, body, request }) => {
-      const jwt = await checkPermission(request, promotionsContract.update.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        promotionsContract.update.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const promo = await db.query.promotions.findFirst({
         where: { id: { eq: params.id } },
       });
-      if (!promo) throw new Error('优惠不存在');
+      if (!promo) return errorResponse(404, '优惠不存在');
       if (
         jwt.role === 'merchant' &&
         promo.ownerId !== jwt.id
-      ) {
-        throw new Error('无权限修改此优惠');
-      }
-
+      )
+        return errorResponse(403, '无权限修改此优惠');
       const [updated] = await db
         .update(promotions)
         .set({ ...body, updatedAt: new Date() })
         .where(sql`${promotions.id} = ${params.id}`)
         .returning();
-
-      if (!updated) throw new Error('更新错误');
+      if (!updated) return errorResponse(500, '更新错误');
       return { status: 200, body: updated };
     },
 
     delete: async ({ params, request }) => {
-      const jwt = await checkPermission(request, promotionsContract.delete.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        promotionsContract.delete.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const promo = await db.query.promotions.findFirst({
         where: { id: { eq: params.id } },
       });
-      if (!promo) throw new Error('优惠不存在');
+      if (!promo) return errorResponse(404, '优惠不存在');
       if (
         jwt.role === 'merchant' &&
         promo.ownerId !== jwt.id
-      ) {
-        throw new Error('无权限删除此优惠');
-      }
-
+      )
+        return errorResponse(403, '无权限删除此优惠');
       await db
         .update(promotions)
         .set({ deletedAt: new Date() })
         .where(sql`${promotions.id} = ${params.id}`);
-
-      return { status: 200, body: { message: 'Deleted' } };
+      return {
+        status: 200,
+        body: { message: 'Deleted' as const },
+      };
     },
   });
 
@@ -715,26 +765,28 @@ export const createRouter = (db: DbInstance) => {
 
   const bookingsRouter = s.router(bookingsContract, {
     create: async ({ body, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.create.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.create.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const rt = await db.query.roomTypes.findFirst({
         where: {
           id: { eq: body.roomTypeId },
           deletedAt: { isNull: true },
         },
       });
-
-      if (!rt) throw new Error('房型不存在');
-      if (rt.stock <= 0) throw new Error('库存不足');
-
+      if (!rt) return errorResponse(404, '房型不存在');
+      if (rt.stock <= 0)
+        return errorResponse(400, '库存不足');
       const hotel = await db.query.hotels.findFirst({
         where: { id: { eq: body.hotelId } },
       });
       if (!hotel || hotel.status !== 'approved')
-        throw new Error('无效的酒店');
-
+        return errorResponse(400, '无效的酒店');
       const checkIn = new Date(body.checkIn);
       const checkOut = new Date(body.checkOut);
       const days = Math.ceil(
@@ -742,9 +794,11 @@ export const createRouter = (db: DbInstance) => {
           (1000 * 60 * 60 * 24),
       );
       if (days <= 0)
-        throw new Error('入住日期必须早于离店日期');
-
-      let totalPrice = Number(rt.price) * days;
+        return errorResponse(
+          400,
+          '入住日期必须早于离店日期',
+        );
+      const totalPrice = Number(rt.price) * days;
 
       let newBooking: any;
       await db.transaction(async (tx) => {
@@ -755,7 +809,6 @@ export const createRouter = (db: DbInstance) => {
             updatedAt: new Date(),
           })
           .where(sql`${roomTypes.id} = ${body.roomTypeId}`);
-
         const [created] = await tx
           .insert(bookings)
           .values({
@@ -764,32 +817,32 @@ export const createRouter = (db: DbInstance) => {
             roomTypeId: body.roomTypeId,
             checkIn: body.checkIn,
             checkOut: body.checkOut,
-            totalPrice: totalPrice,
+            totalPrice,
             status: 'pending',
           })
           .returning();
-
         newBooking = created;
       });
-
       return { status: 201, body: newBooking };
     },
 
     list: async ({ query, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.list.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.list.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const page = query.page || 1;
       const limit = query.limit || 10;
-
       const whereCondition: any = {
         userId: { eq: jwt.id },
         deletedAt: { isNull: true },
       };
       if (query.status)
         whereCondition.status = { eq: query.status };
-
       const bookingList = await db.query.bookings.findMany({
         where: whereCondition,
         with: {
@@ -808,7 +861,6 @@ export const createRouter = (db: DbInstance) => {
         offset: (page - 1) * limit,
         orderBy: { createdAt: 'desc' },
       });
-
       return {
         status: 200,
         body: {
@@ -820,13 +872,16 @@ export const createRouter = (db: DbInstance) => {
     },
 
     adminList: async ({ query, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.adminList.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.adminList.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const page = query.page || 1;
       const limit = query.limit || 10;
-
       const whereCondition: any = {
         deletedAt: { isNull: true },
       };
@@ -836,7 +891,6 @@ export const createRouter = (db: DbInstance) => {
         };
       if (query.status)
         whereCondition.status = { eq: query.status };
-
       const bookingList = await db.query.bookings.findMany({
         where: whereCondition,
         with: {
@@ -848,7 +902,6 @@ export const createRouter = (db: DbInstance) => {
         offset: (page - 1) * limit,
         orderBy: { createdAt: 'desc' },
       });
-
       return {
         status: 200,
         body: {
@@ -860,27 +913,28 @@ export const createRouter = (db: DbInstance) => {
     },
 
     merchantList: async ({ query, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.merchantList.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.merchantList.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const page = query.page || 1;
       const limit = query.limit || 10;
-
       const merchantHotels = await db.query.hotels.findMany(
         {
           where: { ownerId: { eq: jwt.id } },
           columns: { id: true },
         },
       );
-
       const hotelIds = merchantHotels.map((h) => h.id);
       if (!hotelIds.length)
         return {
           status: 200,
           body: { bookings: [], total: 0, page },
         };
-
       const whereCondition: any = {
         hotelId: { in: hotelIds },
         deletedAt: { isNull: true },
@@ -891,7 +945,6 @@ export const createRouter = (db: DbInstance) => {
         };
       if (query.status)
         whereCondition.status = { eq: query.status };
-
       const bookingList = await db.query.bookings.findMany({
         where: whereCondition,
         with: {
@@ -903,7 +956,6 @@ export const createRouter = (db: DbInstance) => {
         offset: (page - 1) * limit,
         orderBy: { createdAt: 'desc' },
       });
-
       return {
         status: 200,
         body: {
@@ -915,10 +967,14 @@ export const createRouter = (db: DbInstance) => {
     },
 
     get: async ({ params, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.get.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.get.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const booking = await db.query.bookings.findFirst({
         where: {
           id: { eq: params.id },
@@ -938,87 +994,85 @@ export const createRouter = (db: DbInstance) => {
           promotion: true,
         },
       });
-
-      if (!booking) throw new Error('预订不存在');
-
+      if (!booking) return errorResponse(404, '预订不存在');
       if (
         jwt.role === 'customer' &&
         booking.userId !== jwt.id
-      ) {
-        throw new Error('无权限查看此预订');
-      }
-
+      )
+        return errorResponse(403, '无权限查看此预订');
       if (jwt.role === 'merchant') {
         const hotel = await db.query.hotels.findFirst({
           where: { id: { eq: booking.hotelId } },
         });
         if (hotel?.ownerId !== jwt.id)
-          throw new Error('无权限查看此预订');
+          return errorResponse(403, '无权限查看此预订');
       }
-
       return { status: 200, body: booking };
     },
 
     confirm: async ({ params, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.confirm.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.confirm.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const booking = await db.query.bookings.findFirst({
         where: { id: { eq: Number(params.id) } },
       });
-      if (!booking) throw new Error('预订不存在');
-
+      if (!booking) return errorResponse(404, '预订不存在');
       if (jwt.role === 'merchant') {
         const hotel = await db.query.hotels.findFirst({
           where: { id: { eq: booking.hotelId } },
         });
         if (hotel?.ownerId !== jwt.id)
-          throw new Error('无权限确认此预订');
+          return errorResponse(403, '无权限确认此预订');
       }
-
       if (booking.status !== 'pending')
-        throw new Error('只能确认待确认状态的预订');
-
+        return errorResponse(
+          400,
+          '只能确认待确认状态的预订',
+        );
       const [updated] = await db
         .update(bookings)
         .set({ status: 'confirmed', updatedAt: new Date() })
         .where(sql`${bookings.id} = ${Number(params.id)}`)
         .returning();
-
-      if (!updated) throw new Error('创建错误');
+      if (!updated) return errorResponse(500, '创建错误');
       return { status: 200, body: updated };
     },
 
     cancel: async ({ params, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.cancel.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.cancel.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       const booking = await db.query.bookings.findFirst({
         where: { id: { eq: Number(params.id) } },
       });
-      if (!booking) throw new Error('预订不存在');
-
+      if (!booking) return errorResponse(404, '预订不存在');
       if (
         jwt.role === 'customer' &&
         booking.userId !== jwt.id
-      ) {
-        throw new Error('无权限取消此预订');
-      }
-
+      )
+        return errorResponse(403, '无权限取消此预订');
       if (jwt.role === 'merchant') {
         const hotel = await db.query.hotels.findFirst({
           where: { id: { eq: booking.hotelId } },
         });
         if (hotel?.ownerId !== jwt.id)
-          throw new Error('无权限取消此预订');
+          return errorResponse(403, '无权限取消此预订');
       }
-
       if (booking.status === 'cancelled')
-        throw new Error('预订已取消');
+        return errorResponse(400, '预订已取消');
       if (booking.status === 'completed')
-        throw new Error('已完成的预订无法取消');
+        return errorResponse(400, '已完成的预订无法取消');
 
       let updated: any;
       await db.transaction(async (tx) => {
@@ -1031,7 +1085,6 @@ export const createRouter = (db: DbInstance) => {
           .where(
             sql`${roomTypes.id} = ${booking.roomTypeId}`,
           );
-
         const [result] = await tx
           .update(bookings)
           .set({
@@ -1040,24 +1093,28 @@ export const createRouter = (db: DbInstance) => {
           })
           .where(sql`${bookings.id} = ${Number(params.id)}`)
           .returning();
-
         updated = result;
       });
-
       return { status: 200, body: updated };
     },
 
     delete: async ({ params, request }) => {
-      const jwt = await checkPermission(request, bookingsContract.delete.metadata.permission);
+      const jwt = await checkPermission(
+        request,
+        bookingsContract.delete.metadata.permission,
+      );
       if (jwt === null)
-        throw Error('内部权限错误')
-
+        return errorResponse(500, '内部权限错误');
+      if ('error' in jwt && jwt.error)
+        return errorResponse(jwt.status, jwt.message);
       await db
         .update(bookings)
         .set({ deletedAt: new Date() })
         .where(sql`${bookings.id} = ${Number(params.id)}`);
-
-      return { status: 200, body: { message: 'Deleted' } };
+      return {
+        status: 200,
+        body: { message: 'Deleted' as const },
+      };
     },
   });
 

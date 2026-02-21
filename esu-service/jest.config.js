@@ -14,7 +14,7 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testTimeout: 30000,
-    // 检测未关闭的句柄
+  // 检测未关闭的句柄
   detectOpenHandles: true,
   // 强制退出（确保测试完成后 Jest 能够正常退出）
   forceExit: true,

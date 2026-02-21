@@ -35,6 +35,17 @@ export const vTimestamps = () => ({
 
 export const ParamIdSchema = v.pipe(v.string(), v.toNumber(), v.integer());
 
+// 通用错误响应 Schema
+export const ErrorResponseSchema = v.object({message: v.string()});
+
+const CommonResponseErrors = {
+    400: ErrorResponseSchema,
+    401: ErrorResponseSchema,
+    403: ErrorResponseSchema,
+    404: ErrorResponseSchema,
+    500: ErrorResponseSchema,
+  };
+
 // 用户Schema（基于原始，移除password在响应中）
 export const UserSchema = v.object({
   id: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 用户ID
@@ -211,7 +222,7 @@ export const usersContract = c.router({
     summary: '获取当前登录用户信息（需token）',
     metadata: { permission: ['customer', 'merchant', 'admin'] as const}, // Permission: 所有角色
   },
-});
+}, {commonResponses: CommonResponseErrors});
 
 export const hotelsContract = c.router({
   create: {
@@ -332,7 +343,7 @@ export const hotelsContract = c.router({
     summary: '删除酒店（软删除，仅admin）',
     metadata: { permission: ['admin'] as const},
   },
-});
+}, {commonResponses: CommonResponseErrors});
 
 export const roomTypesContract = c.router({
   create: {
@@ -376,7 +387,7 @@ export const roomTypesContract = c.router({
     summary: '删除房型（商户/admin）',
     metadata: { permission: ['merchant', 'admin'] as const},
   },
-});
+}, {commonResponses: CommonResponseErrors});
 
 export const promotionsContract = c.router({
   create: {
@@ -433,7 +444,7 @@ export const promotionsContract = c.router({
     summary: '删除优惠',
     metadata: { permission: ['merchant', 'admin'] as const},
   },
-});
+}, {commonResponses: CommonResponseErrors});
 
 export const bookingsContract = c.router({
   create: {
@@ -518,7 +529,7 @@ export const bookingsContract = c.router({
     summary: '删除预订（软删除，仅admin）',
     metadata: { permission: ['admin'] as const},
   },
-});
+}, {commonResponses: CommonResponseErrors});
 
 // 完整API合约
 export const contract = c.router({
