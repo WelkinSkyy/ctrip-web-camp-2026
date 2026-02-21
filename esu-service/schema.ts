@@ -50,7 +50,10 @@ import {
  * - rejected: 审核未通过（需要修改后重新提交）
  * - offline: 已下线（管理员操作，可恢复）
  */
-const hotelStatusEnum = pgEnum('hotel_status', hotelStatus);
+export const hotelStatusEnum = pgEnum(
+  'hotel_status',
+  hotelStatus,
+);
 
 /**
  * 预订状态枚举
@@ -59,7 +62,7 @@ const hotelStatusEnum = pgEnum('hotel_status', hotelStatus);
  * - cancelled: 已取消（用户/商户/管理员取消）
  * - completed: 已完成（用户已入住并退房）
  */
-const bookingStatusEnum = pgEnum(
+export const bookingStatusEnum = pgEnum(
   'booking_status',
   bookingStatus,
 );
@@ -70,7 +73,7 @@ const bookingStatusEnum = pgEnum(
  * - percentage: 百分比折扣（如打8折）
  * - spend_and_save: 满减优惠（如满500减50）
  */
-const promotionTypeEnum = pgEnum(
+export const promotionTypeEnum = pgEnum(
   'promotion_type',
   promotionType,
 );
@@ -81,7 +84,7 @@ const promotionTypeEnum = pgEnum(
  * - merchant: 商户（可管理自己的酒店信息）
  * - admin: 管理员（可审核、管理所有数据）
  */
-const roleTypeEnum = pgEnum('role_type', roleType);
+export const roleTypeEnum = pgEnum('role_type', roleType);
 
 // =============================================================================
 // 辅助函数
@@ -227,7 +230,9 @@ export const roomTypes = pgTable('room_types', {
  */
 export const promotions = pgTable('promotions', {
   id: serial('id').primaryKey(),
-  ownerId: integer('owner_id').references(() => users.id).notNull(),
+  ownerId: integer('owner_id')
+    .references(() => users.id)
+    .notNull(),
   hotelId: integer('hotel_id').references(() => hotels.id),
   roomTypeId: integer('room_type_id').references(
     () => roomTypes.id,

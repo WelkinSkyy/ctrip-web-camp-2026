@@ -1,17 +1,14 @@
 // main.ts
-import dotenv from 'dotenv'
+import 'dotenv/config';
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
-import { routerPlugin } from './router.js';
-import fastifyPrintRoutes from 'fastify-print-routes'
+import fastifyPrintRoutes from 'fastify-print-routes';
 // PostgreSQL 连接池
 import { Pool } from 'pg';
 // Drizzle ORM PostgreSQL 驱动
 import { drizzle } from 'drizzle-orm/node-postgres';
-import {relations} from './schema.js'
+import { relations } from './schema.js';
 import { createRouter } from './router-factory.js';
-
-dotenv.config()
 
 const app = Fastify({ logger: true });
 
@@ -28,19 +25,19 @@ app.register(fastifyJwt, {
 }); // 生产环境请使用安全的密钥
 
 // 请求钩子：除注册和登录外的所有路由都需要验证 JWT
-app.addHook('onRequest', async (request, reply) => {
-  try {
-    if (
-      !['/users/register', '/users/login'].includes(
-        request.url,
-      )
-    ) {
-      await request.jwtVerify();
-    }
-  } catch (err) {
-    reply.code(401).send({ error: '未授权' });
-  }
-});
+// app.addHook('onRequest', async (request, reply) => {
+//   try {
+//     if (
+//       !['/users/register', '/users/login'].includes(
+//         request.url,
+//       )
+//     ) {
+//       await request.jwtVerify();
+//     }
+//   } catch (err) {
+//     reply.code(401).send({ error: '未授权' });
+//   }
+// });
 
 /**
  * PostgreSQL 连接池配置
