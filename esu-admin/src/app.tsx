@@ -1,43 +1,55 @@
-import { useState } from 'preact/hooks'
-import preactLogo from './assets/preact.svg'
-import viteLogo from '/vite.svg'
-import './app.css'
+import { LocationProvider, Router, Route } from 'preact-iso';
+import { currentUser } from './store';
+import Login from './pages/Login';
+import HotelEdit from './pages/HotelEdit';
+import AuditList from './pages/AuditList';
+import MerchantList from './pages/MerchantList';
+import { Toast } from './components/Toast';
+import './app.css';
+
+const _LocationProvider = LocationProvider as any;
+const _Router = Router as any;
+const _Route = Route as any;
 
 export function App() {
-  const [count, setCount] = useState(0)
+  const user = currentUser.value;
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} class="logo" alt="Vite logo" />
-        </a>
-        <a href="https://preactjs.com" target="_blank">
-          <img src={preactLogo} class="logo preact" alt="Preact logo" />
-        </a>
+    <_LocationProvider>
+      <div className="app-wrap">
+        <header className="app-header">
+          <div className="app-title">酒店管理后台</div>
+          {user && (
+            <div className="app-header-right">
+              <nav className="app-nav">
+                {user.role === 'merchant' ? (
+                  <>
+                    <a href="/merchant" className="app-nav-link">我的酒店</a>
+                    <a href="/hotel/edit/new" className="app-nav-link">新增录入</a>
+                  </>
+                ) : (
+                  <a href="/admin" className="app-nav-link">审核中心</a>
+                )}
+              </nav>
+              <div className="app-user">
+                <span className="app-user-name">{user.name} ({user.role})</span>
+                <button type="button" onClick={() => { currentUser.value = null; window.location.href = '/'; }} className="app-logout-btn">退出</button>
+              </div>
+            </div>
+          )}
+        </header>
+        
+        <main className="app-main">
+          <_Router>
+            <_Route path="/login" component={Login} />
+            <_Route path="/merchant" component={MerchantList} />
+            <_Route path="/hotel/edit/:id" component={HotelEdit} />
+            <_Route path="/admin" component={AuditList} />
+            <_Route default component={Login} /> 
+          </_Router>
+        </main>
+        <Toast />
       </div>
-      <h1>Vite + Preact</h1>
-      <div class="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/app.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p>
-        Check out{' '}
-        <a
-          href="https://preactjs.com/guide/v10/getting-started#create-a-vite-powered-preact-app"
-          target="_blank"
-        >
-          create-preact
-        </a>
-        , the official Preact + Vite starter
-      </p>
-      <p class="read-the-docs">
-        Click on the Vite and Preact logos to learn more
-      </p>
-    </>
-  )
+    </_LocationProvider>
+  );
 }

@@ -1,0 +1,110 @@
+/* Hotel edit - 酒店录入/编辑 */
+.hotel-edit-page {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.hotel-edit-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
+  padding: 32px;
+}
+
+.hotel-edit-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  letter-spacing: -0.02em;
+}
+
+.hotel-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 520px) {
+  .hotel-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hotel-edit-field-full {
+  grid-column: 1 / -1;
+}
+
+.hotel-edit-field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.hotel-edit-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--color-bg-card);
+  resize: vertical;
+}
+.hotel-edit-input:hover {
+  border-color: var(--color-text-muted);
+}
+.hotel-edit-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+}
+.hotel-edit-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.hotel-edit-actions {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hotel-edit-submit {
+  padding: 12px 24px;
+  background: var(--color-success);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.05s;
+}
+.hotel-edit-submit:hover {
+  background: #047857;
+}
+.hotel-edit-submit:active {
+  transform: scale(0.98);
+}
+
+.hotel-edit-cancel {
+  padding: 12px 24px;
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.hotel-edit-cancel:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
