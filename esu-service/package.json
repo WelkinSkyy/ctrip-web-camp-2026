@@ -1,16 +1,46 @@
 {
   "name": "esu-service",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "description": "Ctrip winter camp backend",
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.28.2",
+  "license": "MIT",
+  "author": "WelkinSky_",
+  "type": "module",
+  "main": "main.ts",
+  "scripts": {
+    "start": "node dist/main.js",
+    "build": "rolldown -c",
+    "check": "tsc --noEmit",
+    "dev": "tsx main.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "fmt": "oxfmt"
+  },
   "dependencies": {
-    "fastify": "^5.7.4"
-  }
+    "@fastify/jwt": "^10.0.0",
+    "@ts-rest/core": "3.53.0-rc.1",
+    "@ts-rest/fastify": "3.53.0-rc.1",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.4",
+    "drizzle-orm": "1.0.0-beta.15-859cf75",
+    "esu-types": "link:../esu-types",
+    "fastify": "^5.7.4",
+    "fastify-plugin": "^5.1.0",
+    "fastify-print-routes": "^5.0.1",
+    "pg": "^8.18.0",
+    "rolldown-plugin-dts": "^0.22.1",
+    "valibot": "^1.2.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@types/node": "^25.2.2",
+    "@types/pg": "^8.16.0",
+    "drizzle-kit": "1.0.0-beta.15-859cf75",
+    "jest": "^30.2.0",
+    "oxfmt": "^0.32.0",
+    "rolldown": "1.0.0-rc.3",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.28.2"
 }
