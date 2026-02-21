@@ -202,8 +202,8 @@ export const roomTypes = pgTable('room_types', {
   name: varchar('name', { length: 100 }).notNull(),
   price: numeric('price', {
     mode: 'number',
-    precision: 2,
-    scale: 10,
+    precision: 10,
+    scale: 2,
   }).notNull(),
   stock: integer('stock').notNull().default(0),
   capacity: integer('capacity').default(1),
@@ -242,8 +242,8 @@ export const promotions = pgTable('promotions', {
     .default('direct'),
   value: numeric('value', {
     mode: 'number',
-    precision: 2,
-    scale: 10,
+    precision: 10,
+    scale: 2,
   }).notNull(),
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
@@ -308,8 +308,8 @@ export const bookings = pgTable('bookings', {
   checkOut: date('check_out').notNull(),
   totalPrice: numeric('total_price', {
     mode: 'number',
-    precision: 2,
-    scale: 10,
+    precision: 10,
+    scale: 2,
   }).notNull(),
   status: bookingStatusEnum('status')
     .notNull()

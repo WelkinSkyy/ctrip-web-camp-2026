@@ -83,8 +83,9 @@ export const HotelSchema = v.object({
 // 酒店创建/更新 Partial Schema
 export const PartialHotelSchema = v.partial(HotelSchema);
 
-export const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status']);
-
+export const HotelCreateRequestSchema = v.omit(HotelSchema, [
+  'id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'statusDescription'
+]);
 export const HotelListRequestSchema = v.object({
   keyword: v.optional(v.string()), // 关键字
   checkIn: v.optional(v.pipe(v.string(), v.isoDate())),
@@ -132,7 +133,10 @@ export const PromotionSchema = v.object({
   description: v.nullable(v.string()),
   ...vTimestamps()
 });
-
+// 创建专门的请求Schema
+export const PromotionCreateRequestSchema = v.omit(PromotionSchema, [
+  'id', 'createdAt', 'updatedAt', 'deletedAt', 'ownerId'
+]);
 // 优惠创建/更新 Partial
 export const PartialPromotionSchema = v.partial(PromotionSchema);
 
@@ -151,7 +155,7 @@ export const BookingSchema = v.object({
 });
 
 // 预订创建 Schema（无ID、时间、status默认pending）
-export const BookingCreateSchema = v.omit(BookingSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice']); // totalPrice后端计算
+export const BookingCreateSchema = v.omit(BookingSchema, ['id', 'userId', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice']); // totalPrice后端计算
 
 export const BookingListRequestSchema = v.object({
   status: v.optional(v.picklist(bookingStatus)),
@@ -205,7 +209,7 @@ export const usersContract = c.router({
       200: UserResponseSchema, // Response: 当前用户信息
     },
     summary: '获取当前登录用户信息（需token）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] }, // Permission: 所有角色
+    metadata: { permission: ['customer', 'merchant', 'admin'] as const}, // Permission: 所有角色
   },
 });
 
@@ -218,7 +222,7 @@ export const hotelsContract = c.router({
       201: HotelSchema, // Response: 新酒店
     },
     summary: '创建酒店（商户自动ownerId，管理员指定）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
   list: {
     method: 'GET',
@@ -249,18 +253,18 @@ export const hotelsContract = c.router({
       200: HotelSchema,
     },
     summary: '编辑酒店（商户仅自己的，pending/rejected可编，admin无限）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const },
   },
   approve: {
     method: 'POST',
     path: '/hotels/:id/approve',
-    body: v.any(),
+    body: v.object({}),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员审核通过（status → approved）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const },
   },
   reject: {
     method: 'PUT',
@@ -271,29 +275,29 @@ export const hotelsContract = c.router({
       200: HotelSchema,
     },
     summary: '管理员审核不通过',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const },
   },
   offline: {
     method: 'PUT',
     path: '/hotels/:id/offline',
-    body: v.any(),
+    body: v.object({}),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员下线（status → offline，可恢复）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin']  as const },
   },
   online: {
     method: 'PUT',
     path: '/hotels/:id/online',
-    body: v.any(),
+    body: v.object({}),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员恢复上线（status → approved）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const },
   },
   adminList: {
     method: 'GET',
@@ -303,7 +307,7 @@ export const hotelsContract = c.router({
       200: HotelListResponseSchema,
     },
     summary: '管理员酒店列表（支持状态过滤）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const },
   },
   merchantList: {
     method: 'GET',
@@ -316,17 +320,17 @@ export const hotelsContract = c.router({
       200: v.object({ hotels: v.array(HotelSchema), total: v.number() }),
     },
     summary: '商户自己的酒店列表（新增）',
-    metadata: { permission: ['merchant'] },
+    metadata: { permission: ['merchant'] as const },
   },
   delete: {
     method: 'DELETE',
     path: '/hotels/:id',
-    pathParams: v.object({ id: v.string() }),
+    pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除酒店（软删除，仅admin）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const},
   },
 });
 
@@ -339,7 +343,7 @@ export const roomTypesContract = c.router({
       201: RoomTypeSchema,
     },
     summary: '创建房型（关联酒店，商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
   get: {
     method: 'GET',
@@ -360,7 +364,7 @@ export const roomTypesContract = c.router({
       200: RoomTypeSchema,
     },
     summary: '更新房型（价格等，商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const },
   },
   delete: {
     method: 'DELETE',
@@ -370,7 +374,7 @@ export const roomTypesContract = c.router({
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除房型（商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
 });
 
@@ -378,12 +382,12 @@ export const promotionsContract = c.router({
   create: {
     method: 'POST',
     path: '/promotions',
-    body: v.omit(PromotionSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt']),
+    body: PromotionCreateRequestSchema,
     responses: {
       201: PromotionSchema,
     },
     summary: '创建优惠（关联酒店/房型）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
   list: {
     method: 'GET',
@@ -406,7 +410,7 @@ export const promotionsContract = c.router({
       200: PromotionSchema,
     },
     summary: '获取单个优惠',
-    metadata: { permission: '无' },
+    metadata: { permission: null },
   },
   update: {
     method: 'PUT',
@@ -417,7 +421,7 @@ export const promotionsContract = c.router({
       200: PromotionSchema,
     },
     summary: '更新优惠',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
   delete: {
     method: 'DELETE',
@@ -427,7 +431,7 @@ export const promotionsContract = c.router({
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除优惠',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
 });
 
@@ -440,7 +444,7 @@ export const bookingsContract = c.router({
       201: BookingSchema,
     },
     summary: '创建预订（用户端，检查库存减1，计算价格）',
-    metadata: { permission: ['customer'] },
+    metadata: { permission: ['customer'] as const},
   },
   list: {
     method: 'GET',
@@ -450,7 +454,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '用户自己的预订列表',
-    metadata: { permission: ['customer'] },
+    metadata: { permission: ['customer'] as const},
   },
   adminList: {
     method: 'GET',
@@ -460,7 +464,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '管理员预订列表（所有）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const},
   },
   merchantList: {
     method: 'GET',
@@ -470,7 +474,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '商户预订列表（自己的酒店）',
-    metadata: { permission: ['merchant'] },
+    metadata: { permission: ['merchant'] as const},
   },
   get: {
     method: 'GET',
@@ -480,39 +484,39 @@ export const bookingsContract = c.router({
       200: BookingSchema,
     },
     summary: '获取单个预订详情（用户/商户/admin根据权限）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] },
+    metadata: { permission: ['customer', 'merchant', 'admin'] as const},
   },
   confirm: {
     method: 'PUT',
     path: '/bookings/:id/confirm',
-    body: v.any(),
-    pathParams: v.object({ id: v.string() }),
+    body: v.object({}),
+    pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: BookingSchema,
     },
     summary: '确认预订（商户/admin，status → confirmed）',
-    metadata: { permission: ['merchant', 'admin'] },
+    metadata: { permission: ['merchant', 'admin'] as const},
   },
   cancel: {
     method: 'PUT',
     path: '/bookings/:id/cancel',
-    body: v.any(),
-    pathParams: v.object({ id: v.string() }),
+    body: v.object({}),
+    pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: BookingSchema,
     },
     summary: '取消预订（用户/商户/admin，恢复库存，status → cancelled）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] },
+    metadata: { permission: ['customer', 'merchant', 'admin'] as const},
   },
   delete: {
     method: 'DELETE',
     path: '/bookings/:id',
-    pathParams: v.object({ id: v.string() }),
+    pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除预订（软删除，仅admin）',
-    metadata: { permission: ['admin'] },
+    metadata: { permission: ['admin'] as const},
   },
 });
 
@@ -528,4 +532,4 @@ export const contract = c.router({
   promotions: promotionsContract,
   // 预订相关 API（新增预订系统）
   bookings: bookingsContract,
-});
+}) ;

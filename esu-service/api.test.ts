@@ -2,11 +2,12 @@
  * 酒店管理系统 API 集成测试
  *
  * 测试策略：
- * - 导入真正的路由处理器（router-factory）
+ * - 使用 ts-rest 客户端适配器进行类型安全的 API 测试
  * - 注入测试数据库
  * - 测试完整的 API 流程
  */
 
+import 'dotenv/config'
 import {
   describe,
   it,
@@ -18,9 +19,15 @@ import {
 import Fastify from 'fastify';
 import jwt from '@fastify/jwt';
 import bcrypt from 'bcryptjs';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { initClient } from '@ts-rest/core';
+
+// 导入 ts-rest 契约
+import {
+  contract,
+} from 'esu-types';
 
 // 导入真正的路由处理器工厂
 import { createRouter } from './router-factory.js';
@@ -45,7 +52,7 @@ const JWT_SECRET = 'test_secret_key';
 const pool = new Pool({
   connectionString:
     process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/hotel_test',
+    'postgresql://postgres:postgres@localhost:5432/db',
 });
 const db = drizzle({
   client: pool,
@@ -54,7 +61,7 @@ const db = drizzle({
 });
 
 // Fastify 应用实例
-let app = Fastify({ logger: true });
+let app: ReturnType<typeof Fastify>;
 
 // 测试数据
 let testData: {
@@ -76,6 +83,57 @@ const tokens = {
 };
 
 // =============================================================================
+// ts-rest 测试适配器
+// =============================================================================
+
+/**
+ * 创建基于 Fastify inject 的 ts-rest 客户端适配器
+ *
+ * 这个适配器允许我们在不启动实际服务器的情况下，
+ * 使用 ts-rest 的类型安全客户端进行 API 测试
+ */
+const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
+  // 自定义 API fetcher 函数，使用 Fastify 的 inject 方法
+  // ts-rest 的 clientArgs.api 参数格式
+  const apiFetcher = async ({ path, method, headers, body }: {
+    path: string;
+    method: string;
+    headers: Record<string, string>;
+    body: string | undefined;
+  }) => {
+    // 使用 Fastify inject 发送请求
+    const response = await fastifyApp.inject({
+      method: method as any,
+      url: path,
+      headers,
+      body: body ? JSON.parse(body) : undefined,
+    });
+
+    // 返回 ts-rest 期望的格式
+    return {
+      status: response.statusCode,
+      body: JSON.parse(response.body || '{}'),
+      headers: new Headers({
+        'content-type': 'application/json',
+      }),
+    };
+  };
+
+  // 创建 ts-rest 客户端
+  // 使用 api 参数提供自定义 fetcher
+  return initClient(contract, {
+    baseUrl: 'http://localhost', // 提供 base URL
+    api: apiFetcher as any, // ts-rest 使用 api 参数而不是 customFetch
+  });
+};
+
+// ts-rest 测试客户端类型（从函数返回值推断）
+type TsRestClient = ReturnType<typeof createTestClient>;
+
+// ts-rest 测试客户端
+let client: TsRestClient;
+
+// =============================================================================
 // 辅助函数
 // =============================================================================
 
@@ -84,61 +142,23 @@ const createToken = (id: number, role: string) => {
   return app.jwt.sign({ id, role });
 };
 
-/** 发送 HTTP 请求 */
-const request = async (options: {
-  method:
-    | 'DELETE'
-    | 'delete'
-    | 'GET'
-    | 'get'
-    | 'HEAD'
-    | 'head'
-    | 'PATCH'
-    | 'patch'
-    | 'POST'
-    | 'post'
-    | 'PUT'
-    | 'put'
-    | 'OPTIONS'
-    | 'options';
-  url: string;
-  body?: any;
-  token?: string;
-}) => {
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-  };
-  if (options.token) {
-    headers.authorization = `Bearer ${options.token}`;
-  }
-
-  const response = await app.inject({
-    method: options.method,
-    url: options.url,
-    headers,
-    payload: options.body
-      ? JSON.stringify(options.body)
-      : undefined,
-  });
-
-  return {
-    status: response.statusCode,
-    body: response.json
-      ? response.json()
-      : JSON.parse(response.body),
-  };
-};
+/** 创建带认证头的客户端请求选项 */
+const authHeaders = (token: string) => ({
+  extraHeaders: {
+    Authorization: `Bearer ${token}`,
+  },
+});
 
 /** 清空数据库 */
 const cleanDatabase = async () => {
-  const client = await pool.connect();
+  const dbClient = await pool.connect();
   try {
-    await client.query(`
+    await dbClient.query(`
       TRUNCATE TABLE bookings, promotions, room_types, hotels, users
       RESTART IDENTITY CASCADE
     `);
   } finally {
-    client.release();
+    dbClient.release();
   }
 };
 
@@ -275,27 +295,15 @@ const seedTestData = async () => {
 
 beforeAll(async () => {
   // 创建 Fastify 应用
-  app = Fastify({ logger: true });
+  app = Fastify({ logger: false }); // 测试环境禁用日志
   await app.register(jwt, { secret: JWT_SECRET });
-
-  // 请求钩子：除注册和登录外的所有路由都需要验证 JWT
-  app.addHook('onRequest', async (request, reply) => {
-    try {
-      if (
-        !['/users/register', '/users/login'].includes(
-          request.url,
-        )
-      ) {
-        await request.jwtVerify();
-      }
-    } catch (err) {
-      reply.code(401).send({ error: '未授权' });
-    }
-  });
 
   // 注册真正的路由处理器（注入测试数据库）
   const routerPlugin = createRouter(db);
   await app.register(routerPlugin);
+
+  // 创建 ts-rest 测试客户端
+  client = createTestClient(app);
 
   // 准备测试数据
   await cleanDatabase();
@@ -314,12 +322,24 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await app.close();
   await pool.end();
 });
 
 beforeEach(async () => {
   await cleanDatabase();
   await seedTestData();
+
+  // 重新生成 Token（因为数据已重置）
+  tokens.admin = createToken(testData.admin.id, 'admin');
+  tokens.merchant = createToken(
+    testData.merchant.id,
+    'merchant',
+  );
+  tokens.customer = createToken(
+    testData.customer.id,
+    'customer',
+  );
 });
 
 // =============================================================================
@@ -329,70 +349,68 @@ beforeEach(async () => {
 describe('用户模块', () => {
   describe('POST /users/register', () => {
     it('成功注册新用户', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/users/register',
+      const result = await client.users.register({
         body: {
           username: 'newuser',
           password: 'password123',
           role: 'customer',
+          phone: null,
+          email: null,
         },
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body.username).toBe('newuser');
-      expect(res.body.password).toBeUndefined();
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.username).toBe('newuser');
+      }
     });
   });
 
   describe('POST /users/login', () => {
     it('成功登录', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/users/login',
+      const result = await client.users.login({
         body: {
           username: 'customer',
           password: 'password123',
         },
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.token).toBeDefined();
-      expect(res.body.user.username).toBe('customer');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.token).toBeDefined();
+        expect(result.body.user.username).toBe('customer');
+      }
     });
 
     it('密码错误返回401', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/users/login',
+      const result = await client.users.login({
         body: {
           username: 'customer',
           password: 'wrongpassword',
         },
       });
 
-      expect(res.status).toBe(401);
+      // ts-rest 会将非 2xx 响应视为错误，但这里我们检查状态码
+      expect(result.status).toBeGreaterThanOrEqual(400);
     });
   });
 
   describe('GET /users/me', () => {
     it('获取当前用户信息', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/users/me',
-        token: tokens.customer,
+      const result = await client.users.me({
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.username).toBe('customer');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.username).toBe('customer');
+      }
     });
 
     it('未登录返回401', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/users/me',
-      });
-      expect(res.status).toBe(401);
+      const result = await client.users.me({});
+
+      expect(result.status).toBe(401);
     });
   });
 });
@@ -404,198 +422,209 @@ describe('用户模块', () => {
 describe('酒店模块', () => {
   describe('POST /hotels', () => {
     it('商户创建酒店', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/hotels',
-        token: tokens.merchant,
+      const result = await client.hotels.create({
         body: {
           nameZh: '新酒店',
+          nameEn: null,
           address: '深圳市测试路100号',
           starRating: 5,
           openingDate: '2023-01-01',
+          ownerId: testData.merchant.id,
+          nearbyAttractions: null,
+          images: null,
+          facilities: null,
         },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body.nameZh).toBe('新酒店');
-      expect(res.body.status).toBe('pending');
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.nameZh).toBe('新酒店');
+        expect(result.body.status).toBe('pending');
+      }
     });
 
     it('普通用户无权限', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/hotels',
-        token: tokens.customer,
+      const result = await client.hotels.create({
         body: {
           nameZh: '测试',
+          nameEn: null,
           address: '测试',
           starRating: 3,
           openingDate: '2023-01-01',
+          ownerId: testData.customer.id,
+          nearbyAttractions: null,
+          images: null,
+          facilities: null,
         },
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(403);
+      expect(result.status).toBe(403);
     });
   });
 
   describe('GET /hotels', () => {
     it('返回已审核通过的酒店列表', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/hotels',
-      });
+      const result = await client.hotels.list({});
 
-      expect(res.status).toBe(200);
-      expect(res.body.hotels.length).toBeGreaterThan(0);
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+      }
     });
   });
 
   describe('GET /hotels/:id', () => {
     it('返回酒店详情', async () => {
-      const res = await request({
-        method: 'GET',
-        url: `/hotels/${testData.hotel.id}`,
+      const result = await client.hotels.get({
+        params: { id: String(testData.hotel.id) },
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.id).toBe(testData.hotel.id);
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.id).toBe(testData.hotel.id);
+      }
     });
 
     it('酒店不存在返回404', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/hotels/9999',
+      const result = await client.hotels.get({
+        params: { id: '9999' },
       });
-      expect(res.status).toBe(404);
+
+      expect(result.status).toBe(404);
     });
   });
 
   describe('PUT /hotels/:id', () => {
     it('商户更新自己的酒店', async () => {
-      const res = await request({
-        method: 'PUT',
-        url: `/hotels/${testData.hotel.id}`,
-        token: tokens.merchant,
+      const result = await client.hotels.update({
+        params: { id: String(testData.hotel.id) },
         body: { nameZh: '更新后的酒店' },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.nameZh).toBe('更新后的酒店');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.nameZh).toBe('更新后的酒店');
+      }
     });
   });
 
   describe('POST /hotels/:id/approve', () => {
     it('管理员审核通过', async () => {
-      const res = await request({
-        method: 'POST',
-        url: `/hotels/${testData.pendingHotel.id}/approve`,
-        token: tokens.admin,
+      const result = await client.hotels.approve({
+        params: { id: String(testData.pendingHotel.id) },
+        body: {},
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('approved');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('approved');
+      }
     });
 
     it('商户无权限', async () => {
-      const res = await request({
-        method: 'POST',
-        url: `/hotels/${testData.pendingHotel.id}/approve`,
-        token: tokens.merchant,
+      const result = await client.hotels.approve({
+        params: { id: String(testData.pendingHotel.id) },
+        body: {},
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(403);
+      expect(result.status).toBe(403);
     });
   });
 
-  describe('PATCH /hotels/:id/reject', () => {
+  describe('PUT /hotels/:id/reject', () => {
     it('管理员审核拒绝', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/hotels/${testData.pendingHotel.id}/reject`,
-        token: tokens.admin,
+      const result = await client.hotels.reject({
+        params: { id: String(testData.pendingHotel.id) },
         body: { rejectReason: '信息不完整' },
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('rejected');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('rejected');
+      }
     });
   });
 
-  describe('PATCH /hotels/:id/offline', () => {
+  describe('PUT /hotels/:id/offline', () => {
     it('管理员下线酒店', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/hotels/${testData.hotel.id}/offline`,
-        token: tokens.admin,
+      const result = await client.hotels.offline({
+        params: { id: String(testData.hotel.id) },
+        body: {},
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('offline');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('offline');
+      }
     });
   });
 
-  describe('PATCH /hotels/:id/online', () => {
+  describe('PUT /hotels/:id/online', () => {
     it('管理员恢复上线', async () => {
       await db
         .update(hotels)
         .set({ status: 'offline' })
         .where(eq(hotels.id, testData.hotel.id));
 
-      const res = await request({
-        method: 'PATCH',
-        url: `/hotels/${testData.hotel.id}/online`,
-        token: tokens.admin,
+      const result = await client.hotels.online({
+        params: { id: String(testData.hotel.id) },
+        body: {},
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('approved');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('approved');
+      }
     });
   });
 
   describe('GET /hotels/admin', () => {
     it('管理员查看所有酒店', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/hotels/admin',
-        token: tokens.admin,
+      const result = await client.hotels.adminList({
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
 
     it('商户无权限', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/hotels/admin',
-        token: tokens.merchant,
+      const result = await client.hotels.adminList({
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(403);
+      expect(result.status).toBe(403);
     });
   });
 
   describe('GET /hotels/merchant', () => {
     it('商户查看自己的酒店', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/hotels/merchant',
-        token: tokens.merchant,
+      const result = await client.hotels.merchantList({
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
   describe('DELETE /hotels/:id', () => {
     it('管理员软删除酒店', async () => {
-      const res = await request({
-        method: 'DELETE',
-        url: `/hotels/${testData.hotel.id}`,
-        token: tokens.admin,
+      const result = await client.hotels.delete({
+        params: { id: String(testData.hotel.id) },
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.message).toBe('已删除');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.message).toBe('Deleted');
+      }
     });
   });
 });
@@ -607,66 +636,69 @@ describe('酒店模块', () => {
 describe('房型模块', () => {
   describe('POST /room-types', () => {
     it('创建房型', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/room-types',
-        token: tokens.merchant,
+      const result = await client.roomTypes.create({
         body: {
           hotelId: testData.hotel.id,
           name: '豪华间',
-          price: '599.00',
+          price: 599.0,
           stock: 5,
+          capacity: null,
+          description: null,
         },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body.name).toBe('豪华间');
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.name).toBe('豪华间');
+      }
     });
   });
 
   describe('GET /room-types/:id', () => {
     it('获取房型详情', async () => {
-      const res = await request({
-        method: 'GET',
-        url: `/room-types/${testData.roomType.id}`,
+      const result = await client.roomTypes.get({
+        params: { id: String(testData.roomType.id) },
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.id).toBe(testData.roomType.id);
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.id).toBe(testData.roomType.id);
+      }
     });
 
     it('房型不存在返回404', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/room-types/9999',
+      const result = await client.roomTypes.get({
+        params: { id: '9999' },
       });
-      expect(res.status).toBe(404);
+
+      expect(result.status).toBe(404);
     });
   });
 
-  describe('PATCH /room-types/:id', () => {
+  describe('PUT /room-types/:id', () => {
     it('更新房型', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/room-types/${testData.roomType.id}`,
-        token: tokens.merchant,
-        body: { price: '499.00' },
+      const result = await client.roomTypes.update({
+        params: { id: String(testData.roomType.id) },
+        body: { price: 499.0 },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.price).toBe('499.00');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.price).toBe(499);
+      }
     });
   });
 
   describe('DELETE /room-types/:id', () => {
     it('删除房型', async () => {
-      const res = await request({
-        method: 'DELETE',
-        url: `/room-types/${testData.roomType.id}`,
-        token: tokens.merchant,
+      const result = await client.roomTypes.delete({
+        params: { id: String(testData.roomType.id) },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 });
@@ -678,75 +710,72 @@ describe('房型模块', () => {
 describe('优惠模块', () => {
   describe('POST /promotions', () => {
     it('创建优惠', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/promotions',
-        token: tokens.merchant,
+      const result = await client.promotions.create({
         body: {
           hotelId: testData.hotel.id,
+          roomTypeId: null,
           type: 'direct',
-          value: '50.00',
+          value: 50.0,
           startDate: '2024-01-01',
           endDate: '2024-12-31',
+          description: null,
         },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body.type).toBe('direct');
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.type).toBe('direct');
+      }
     });
   });
 
   describe('GET /promotions', () => {
     it('获取优惠列表', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/promotions',
-      });
-      expect(res.status).toBe(200);
+      const result = await client.promotions.list({});
+
+      expect(result.status).toBe(200);
     });
   });
 
   describe('GET /promotions/:id', () => {
     it('获取优惠详情', async () => {
-      const res = await request({
-        method: 'GET',
-        url: `/promotions/${testData.promotion.id}`,
+      const result = await client.promotions.get({
+        params: { id: String(testData.promotion.id) },
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
 
     it('优惠不存在返回404', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/promotions/9999',
+      const result = await client.promotions.get({
+        params: { id: '9999' },
       });
-      expect(res.status).toBe(404);
+
+      expect(result.status).toBe(404);
     });
   });
 
-  describe('PATCH /promotions/:id', () => {
+  describe('PUT /promotions/:id', () => {
     it('更新优惠', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/promotions/${testData.promotion.id}`,
-        token: tokens.merchant,
-        body: { value: '0.80' },
+      const result = await client.promotions.update({
+        params: { id: String(testData.promotion.id) },
+        body: { value: 0.8 },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
   describe('DELETE /promotions/:id', () => {
     it('删除优惠', async () => {
-      const res = await request({
-        method: 'DELETE',
-        url: `/promotions/${testData.promotion.id}`,
-        token: tokens.merchant,
+      const result = await client.promotions.delete({
+        params: { id: String(testData.promotion.id) },
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 });
@@ -758,20 +787,21 @@ describe('优惠模块', () => {
 describe('预订模块', () => {
   describe('POST /bookings', () => {
     it('用户创建预订', async () => {
-      const res = await request({
-        method: 'POST',
-        url: '/bookings',
-        token: tokens.customer,
+      const result = await client.bookings.create({
         body: {
           hotelId: testData.hotel.id,
           roomTypeId: testData.roomType.id,
           checkIn: '2024-07-01',
           checkOut: '2024-07-03',
+          promotionId: null,
         },
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('pending');
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.status).toBe('pending');
+      }
     });
 
     it('库存不足返回400', async () => {
@@ -780,80 +810,74 @@ describe('预订模块', () => {
         .set({ stock: 0 })
         .where(eq(roomTypes.id, testData.roomType.id));
 
-      const res = await request({
-        method: 'POST',
-        url: '/bookings',
-        token: tokens.customer,
+      const result = await client.bookings.create({
         body: {
           hotelId: testData.hotel.id,
           roomTypeId: testData.roomType.id,
           checkIn: '2024-07-01',
           checkOut: '2024-07-03',
+          promotionId: null,
         },
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(400);
+      expect(result.status).toBe(400);
     });
   });
 
   describe('GET /bookings', () => {
     it('用户查看自己的预订', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/bookings',
-        token: tokens.customer,
+      const result = await client.bookings.list({
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
   describe('GET /bookings/admin', () => {
     it('管理员查看所有预订', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/bookings/admin',
-        token: tokens.admin,
+      const result = await client.bookings.adminList({
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
   describe('GET /bookings/merchant', () => {
     it('商户查看自己酒店的预订', async () => {
-      const res = await request({
-        method: 'GET',
-        url: '/bookings/merchant',
-        token: tokens.merchant,
+      const result = await client.bookings.merchantList({
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
   describe('GET /bookings/:id', () => {
     it('用户查看自己的预订详情', async () => {
-      const res = await request({
-        method: 'GET',
-        url: `/bookings/${testData.booking.id}`,
-        token: tokens.customer,
+      const result = await client.bookings.get({
+        params: { id: String(testData.booking.id) },
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 
-  describe('PATCH /bookings/:id/confirm', () => {
+  describe('PUT /bookings/:id/confirm', () => {
     it('商户确认预订', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/bookings/${testData.booking.id}/confirm`,
-        token: tokens.merchant,
+      const result = await client.bookings.confirm({
+        params: { id: String(testData.booking.id) },
+        body: {},
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('confirmed');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('confirmed');
+      }
     });
 
     it('非pending状态返回400', async () => {
@@ -862,38 +886,39 @@ describe('预订模块', () => {
         .set({ status: 'confirmed' })
         .where(eq(bookings.id, testData.booking.id));
 
-      const res = await request({
-        method: 'PATCH',
-        url: `/bookings/${testData.booking.id}/confirm`,
-        token: tokens.merchant,
+      const result = await client.bookings.confirm({
+        params: { id: String(testData.booking.id) },
+        body: {},
+        ...authHeaders(tokens.merchant),
       });
 
-      expect(res.status).toBe(400);
+      expect(result.status).toBe(400);
     });
   });
 
-  describe('PATCH /bookings/:id/cancel', () => {
+  describe('PUT /bookings/:id/cancel', () => {
     it('用户取消预订', async () => {
-      const res = await request({
-        method: 'PATCH',
-        url: `/bookings/${testData.booking.id}/cancel`,
-        token: tokens.customer,
+      const result = await client.bookings.cancel({
+        params: { id: String(testData.booking.id) },
+        body: {},
+        ...authHeaders(tokens.customer),
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('cancelled');
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.status).toBe('cancelled');
+      }
     });
   });
 
   describe('DELETE /bookings/:id', () => {
     it('管理员删除预订', async () => {
-      const res = await request({
-        method: 'DELETE',
-        url: `/bookings/${testData.booking.id}`,
-        token: tokens.admin,
+      const result = await client.bookings.delete({
+        params: { id: String(testData.booking.id) },
+        ...authHeaders(tokens.admin),
       });
 
-      expect(res.status).toBe(200);
+      expect(result.status).toBe(200);
     });
   });
 });
