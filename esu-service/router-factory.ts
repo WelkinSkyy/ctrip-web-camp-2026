@@ -196,21 +196,25 @@ export const createRouter = (db: DbInstance) => {
       const page = query.page || 1;
       const limit = query.limit || 10;
       const offset = (page - 1) * limit;
+      const defaultRadius = 10; // 默认搜索半径 10 公里
+
+      // 是否启用地理位置搜索
+      const hasGeoSearch = query.userLat !== undefined && query.userLng !== undefined;
+      const userLat = query.userLat;
+      const userLng = query.userLng;
+      const radius = query.radius || defaultRadius;
 
       // 关键词搜索 - PostgreSQL 全文搜索
-      // 搜索字段：nameZh, nameEn, address, tags, facilities, nearbyAttractions
       let searchFilter: SQL | undefined;
       if (query.keyword && query.keyword.trim()) {
-        // 分词：将空格分隔的关键词转换为 & 连接的 tsquery 格式（AND 逻辑）
         const keywords = query.keyword
           .trim()
           .split(/\s+/)
           .filter((k) => k.length > 0)
-          .map((k) => k + ':*') // 支持前缀匹配
+          .map((k) => k + ':*')
           .join(' & ');
 
         if (keywords) {
-          // 使用 simple 配置（适合中文），搜索多个字段
           searchFilter = sql`
             to_tsvector('simple',
               COALESCE(${hotels.nameZh}, '') || ' ' ||
@@ -224,7 +228,106 @@ export const createRouter = (db: DbInstance) => {
         }
       }
 
-      // 获取符合条件的酒店 ID 列表（用于分页和计数）
+      // 地理位置搜索 - 使用 Haversine 公式计算距离
+      // 如果启用位置搜索，优先使用 SQL 查询获取带距离的结果
+      if (hasGeoSearch) {
+        // 使用 Haversine 公式计算距离（单位：公里）
+        // 6371 是地球平均半径（公里）
+        const distanceSql = sql`
+          (6371 * acos(
+            LEAST(1.0, GREATEST(-1.0,
+              cos(radians(${userLat})) * cos(radians(${hotels.latitude})) *
+              cos(radians(${hotels.longitude}) - radians(${userLng})) +
+              sin(radians(${userLat})) * sin(radians(${hotels.latitude}))
+            ))
+          ))
+        `;
+
+        // 获取带距离的酒店列表
+        const hotelsWithDistance = await db
+          .select({
+            id: hotels.id,
+            distance: distanceSql,
+          })
+          .from(hotels).where(sql`
+            ${hotels.deletedAt} IS NULL
+            AND ${hotels.status} = 'approved'
+            AND ${hotels.latitude} IS NOT NULL
+            AND ${hotels.longitude} IS NOT NULL
+            ${searchFilter ? sql` AND ${searchFilter}` : sql``}
+            ${query.starRating ? sql` AND ${hotels.starRating} = ${query.starRating}` : sql``}
+            ${query.facilities && query.facilities.length > 0 ? sql` AND ${hotels.facilities} && ${query.facilities}` : sql``}
+            ${
+              query.priceMin !== undefined || query.priceMax !== undefined
+                ? sql` AND EXISTS (
+                  SELECT 1 FROM ${roomTypes}
+                  WHERE ${roomTypes.hotelId} = ${hotels.id}
+                  AND ${roomTypes.deletedAt} IS NULL
+                  ${query.priceMin !== undefined ? sql` AND ${roomTypes.price} >= ${query.priceMin}` : sql``}
+                  ${query.priceMax !== undefined ? sql` AND ${roomTypes.price} <= ${query.priceMax}` : sql``}
+                )`
+                : sql``
+            }
+            AND ${distanceSql} <= ${radius}
+          `);
+
+        // 根据排序方式排序
+        let sortedHotels = hotelsWithDistance as Array<{ id: number; distance: number | null }>;
+        if (query.sortBy === 'distance') {
+          sortedHotels.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+        }
+
+        const total = sortedHotels.length;
+        const pageHotels = sortedHotels.slice(offset, offset + limit);
+
+        if (pageHotels.length === 0) {
+          return { status: 200, body: { hotels: [], total, page } };
+        }
+
+        // 获取完整酒店数据
+        const hotelIds = pageHotels.map((h) => h.id);
+        const distanceMap = new Map(pageHotels.map((h) => [h.id, h.distance]));
+
+        const hotelList = await db.query.hotels.findMany({
+          where: { id: { in: hotelIds } },
+          with: {
+            roomTypes: { where: { deletedAt: { isNull: true } } },
+            promotions: { where: { deletedAt: { isNull: true } } },
+          },
+        });
+
+        // 计算折扣价格并添加距离信息
+        const hotelsWithDiscount = await Promise.all(
+          hotelList.map(async (hotel) => {
+            const roomTypesWithDiscount: RoomTypeWithDiscount[] = await Promise.all(
+              (hotel.roomTypes ?? []).map(async (rt) => {
+                const activePromos = await getActivePromotions(hotel.id, rt.id);
+                let discountedPrice = Number(rt.price);
+                for (const promo of activePromos) {
+                  discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
+                }
+                return { ...rt, discountedPrice: Math.max(0, discountedPrice) };
+              }),
+            );
+
+            const hotelWithDistance: HotelWithRelations = {
+              ...hotel,
+              roomTypes: roomTypesWithDiscount,
+              distance: distanceMap.get(hotel.id) ?? undefined,
+            };
+            return hotelWithDistance;
+          }),
+        );
+
+        // 按原始排序顺序返回
+        const sortedResult = hotelIds
+          .map((id) => hotelsWithDiscount.find((h) => h.id === id))
+          .filter((h): h is HotelWithRelations => h !== undefined);
+
+        return { status: 200, body: { hotels: sortedResult, total, page } };
+      }
+
+      // 非地理位置搜索 - 原有逻辑
       const filteredIds = await db.select({ id: hotels.id }).from(hotels).where(sql`
           ${hotels.deletedAt} IS NULL
           AND ${hotels.status} = 'approved'
@@ -247,29 +350,25 @@ export const createRouter = (db: DbInstance) => {
       const total = filteredIds.length;
       const pageIds = filteredIds.slice(offset, offset + limit).map((p) => p.id);
 
-      // 如果没有符合条件的酒店，直接返回空列表
       if (pageIds.length === 0) {
         return { status: 200, body: { hotels: [], total, page } };
       }
 
-      // 使用 Drizzle relational query 获取完整数据（使用 inArray）
+      // 根据排序方式排序
+      let orderBy: any = { createdAt: 'desc' as const };
+      if (query.sortBy === 'rating') {
+        orderBy = { averageRating: 'desc' as const };
+      }
+
       const hotelList = await db.query.hotels.findMany({
-        where: {
-          id: { in: pageIds },
-          deletedAt: { isNull: true },
-        },
+        where: { id: { in: pageIds } },
         with: {
-          roomTypes: {
-            where: { deletedAt: { isNull: true } },
-          },
-          promotions: {
-            where: { deletedAt: { isNull: true } },
-          },
+          roomTypes: { where: { deletedAt: { isNull: true } } },
+          promotions: { where: { deletedAt: { isNull: true } } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       });
 
-      // 计算折扣价格并构造返回数据
       const hotelsWithDiscount: HotelWithRelations[] = await Promise.all(
         hotelList.map(async (hotel) => {
           const roomTypesWithDiscount: RoomTypeWithDiscount[] = await Promise.all(
@@ -279,17 +378,11 @@ export const createRouter = (db: DbInstance) => {
               for (const promo of activePromos) {
                 discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
               }
-              return {
-                ...rt,
-                discountedPrice: Math.max(0, discountedPrice),
-              };
+              return { ...rt, discountedPrice: Math.max(0, discountedPrice) };
             }),
           );
 
-          return {
-            ...hotel,
-            roomTypes: roomTypesWithDiscount,
-          };
+          return { ...hotel, roomTypes: roomTypesWithDiscount };
         }),
       );
 

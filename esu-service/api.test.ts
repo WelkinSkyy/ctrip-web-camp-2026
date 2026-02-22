@@ -718,6 +718,102 @@ describe('酒店模块', () => {
         }
       }
     });
+
+    it('地理位置搜索 - 按距离筛选', async () => {
+      // 测试酒店位于北京（39.9042, 116.4074）
+      // 使用北京坐标搜索，半径 50 公里
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '50',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        // 应该找到北京的酒店
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+        // 每个酒店应该有 distance 字段
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel).toHaveProperty('distance');
+          expect(hotel.distance).toBeGreaterThanOrEqual(0);
+          expect(hotel.distance).toBeLessThanOrEqual(50);
+        });
+      }
+    });
+
+    it('地理位置搜索 - 半径外无结果', async () => {
+      // 测试酒店位于北京（39.9042, 116.4074）
+      // 使用上海坐标搜索，半径 1 公里（应该找不到北京的酒店）
+      const result = await client.hotels.list({
+        query: {
+          userLat: '31.2304',
+          userLng: '121.4737',
+          radius: '1',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        // 北京到上海约 1000+ 公里，1 公里半径内应该没有酒店
+        expect(result.body.hotels).toEqual([]);
+        expect(result.body.total).toBe(0);
+      }
+    });
+
+    it('地理位置搜索 - 按距离排序', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '100',
+          sortBy: 'distance',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        // 验证按距离升序排列
+        const distances = result.body.hotels.map((h: HotelWithRelations) => h.distance);
+        for (let i = 1; i < distances.length; i++) {
+          expect(distances[i]).toBeGreaterThanOrEqual(distances[i - 1]!);
+        }
+      }
+    });
+
+    it('地理位置搜索 - 结合关键词', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '50',
+          keyword: '测试',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        // 应该找到符合关键词且在半径内的酒店
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.nameZh).toContain('测试');
+          expect(hotel.distance).toBeLessThanOrEqual(50);
+        });
+      }
+    });
+
+    it('地理位置搜索 - 无经纬度参数时忽略', async () => {
+      // 不提供位置参数，应该返回所有酒店（不计算距离）
+      const result = await client.hotels.list({});
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        // 没有 distance 字段（或为 undefined）
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeUndefined();
+        });
+      }
+    });
   });
 
   describe('GET /hotels/:id', () => {

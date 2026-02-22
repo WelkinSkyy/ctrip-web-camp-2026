@@ -113,6 +113,11 @@ export const HotelListRequestSchema = v.object({
   facilities: v.optional(v.array(v.string())),
   priceMin: v.optional(v.pipe(v.string(), v.toNumber())),
   priceMax: v.optional(v.pipe(v.string(), v.toNumber())),
+  // 地理位置搜索参数
+  userLat: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-90), v.maxValue(90))), // 用户纬度
+  userLng: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-180), v.maxValue(180))), // 用户经度
+  radius: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(0.1), v.maxValue(100))), // 搜索半径（公里），默认 10km
+  sortBy: v.optional(v.picklist(['distance', 'price', 'rating', 'createdAt'])), // 排序方式
   page: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
   limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
 });
@@ -233,6 +238,7 @@ export const HotelWithRelationsSchema = v.intersect([
   v.object({
     roomTypes: v.optional(v.array(RoomTypeWithDiscountSchema)),
     promotions: v.optional(v.array(PromotionSchema)),
+    distance: v.optional(v.number()), // 距离用户的公里数（仅位置搜索时返回）
   }),
 ]);
 
