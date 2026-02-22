@@ -430,9 +430,14 @@ export const createRouter = (db: DbInstance) => {
       const hotel = await db.query.hotels.findFirst({ where: { id: { eq: params.id } } });
       if (!hotel) return errorResponse(404, '酒店不存在');
       if (jwt.role === 'merchant' && hotel.ownerId !== jwt.id) return errorResponse(403, '无权限修改此酒店');
+      // 商户更新已审核通过的酒店时，需要重新审核
+      let newStatus = body.status;
+      if (jwt.role === 'merchant' && hotel.status === 'approved') {
+        newStatus = 'pending';
+      }
       const [updated] = await db
         .update(hotels)
-        .set({ ...body, updatedAt: new Date() })
+        .set({ ...body, status: newStatus, updatedAt: new Date() })
         .where(sql`${hotels.id} = ${params.id}`)
         .returning();
       if (!updated) return errorResponse(500, '更新错误');
