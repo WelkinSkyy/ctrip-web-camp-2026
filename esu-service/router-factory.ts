@@ -6,7 +6,7 @@
  */
 
 import { initServer } from '@ts-rest/fastify';
-import { sql } from 'drizzle-orm';
+import { SQL, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import bcrypt from 'bcryptjs';
 import * as v from 'valibot';
@@ -23,7 +23,15 @@ import {
   roleType,
   UserSchema,
   JwtSchema,
+  RoomTypeWithDiscountSchema,
+  HotelWithRelationsSchema,
+  HotelDetailSchema,
 } from 'esu-types';
+
+// 从 Valibot Schema 推断类型
+type RoomTypeWithDiscount = v.InferOutput<typeof RoomTypeWithDiscountSchema>;
+type HotelWithRelations = v.InferOutput<typeof HotelWithRelationsSchema>;
+type HotelDetail = v.InferOutput<typeof HotelDetailSchema>;
 
 import { users, hotels, roomTypes, promotions, bookings, ratings, relations } from './schema.js';
 import type { FastifyRequest } from 'fastify';
@@ -188,42 +196,104 @@ export const createRouter = (db: DbInstance) => {
       const page = query.page || 1;
       const limit = query.limit || 10;
       const offset = (page - 1) * limit;
-      const whereCondition: any = {
-        deletedAt: { isNull: true },
-        status: { eq: 'approved' },
-      };
-      if (query.keyword) whereCondition.nameZh = { ilike: `%${query.keyword}%` };
-      if (query.starRating) whereCondition.starRating = { eq: query.starRating };
 
-      const hotelList = await db.query.hotels.findMany({
-        where: whereCondition,
-        with: {
-          roomTypes: { where: { deletedAt: { isNull: true } } },
-          promotions: { where: { deletedAt: { isNull: true } } },
-        },
-        limit,
-        offset,
-        orderBy: { createdAt: 'desc' },
-      });
+      // 关键词搜索 - PostgreSQL 全文搜索
+      // 搜索字段：nameZh, nameEn, address, tags, facilities, nearbyAttractions
+      let searchFilter: SQL | undefined;
+      if (query.keyword && query.keyword.trim()) {
+        // 分词：将空格分隔的关键词转换为 & 连接的 tsquery 格式（AND 逻辑）
+        const keywords = query.keyword
+          .trim()
+          .split(/\s+/)
+          .filter((k) => k.length > 0)
+          .map((k) => k + ':*') // 支持前缀匹配
+          .join(' & ');
 
-      for (const hotel of hotelList) {
-        if (hotel.roomTypes?.length) {
-          for (const rt of hotel.roomTypes) {
-            const activePromos = await getActivePromotions(hotel.id, rt.id);
-            let discountedPrice = Number(rt.price);
-            for (const promo of activePromos) {
-              discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
-            }
-            (rt as any).discountedPrice = Math.max(0, discountedPrice);
-          }
+        if (keywords) {
+          // 使用 simple 配置（适合中文），搜索多个字段
+          searchFilter = sql`
+            to_tsvector('simple',
+              COALESCE(${hotels.nameZh}, '') || ' ' ||
+              COALESCE(${hotels.nameEn}, '') || ' ' ||
+              COALESCE(${hotels.address}, '') || ' ' ||
+              COALESCE(${hotels.tags}::text, '') || ' ' ||
+              COALESCE(${hotels.facilities}::text, '') || ' ' ||
+              COALESCE(${hotels.nearbyAttractions}::text, '')
+            ) @@ to_tsquery('simple', ${keywords})
+          `;
         }
       }
 
-      const totalCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(hotels)
-        .where(sql`${hotels.deletedAt} IS NULL AND ${hotels.status} = 'approved'`);
-      return { status: 200, body: { hotels: hotelList, total: Number(totalCount[0]?.count) || 0, page } };
+      // 获取符合条件的酒店 ID 列表（用于分页和计数）
+      const filteredIds = await db.select({ id: hotels.id }).from(hotels).where(sql`
+          ${hotels.deletedAt} IS NULL
+          AND ${hotels.status} = 'approved'
+          ${searchFilter ? sql` AND ${searchFilter}` : sql``}
+          ${query.starRating ? sql` AND ${hotels.starRating} = ${query.starRating}` : sql``}
+          ${query.facilities && query.facilities.length > 0 ? sql` AND ${hotels.facilities} && ${query.facilities}` : sql``}
+          ${
+            query.priceMin !== undefined || query.priceMax !== undefined
+              ? sql` AND EXISTS (
+                SELECT 1 FROM ${roomTypes}
+                WHERE ${roomTypes.hotelId} = ${hotels.id}
+                AND ${roomTypes.deletedAt} IS NULL
+                ${query.priceMin !== undefined ? sql` AND ${roomTypes.price} >= ${query.priceMin}` : sql``}
+                ${query.priceMax !== undefined ? sql` AND ${roomTypes.price} <= ${query.priceMax}` : sql``}
+              )`
+              : sql``
+          }
+        `);
+
+      const total = filteredIds.length;
+      const pageIds = filteredIds.slice(offset, offset + limit).map((p) => p.id);
+
+      // 如果没有符合条件的酒店，直接返回空列表
+      if (pageIds.length === 0) {
+        return { status: 200, body: { hotels: [], total, page } };
+      }
+
+      // 使用 Drizzle relational query 获取完整数据（使用 inArray）
+      const hotelList = await db.query.hotels.findMany({
+        where: {
+          id: { in: pageIds },
+          deletedAt: { isNull: true },
+        },
+        with: {
+          roomTypes: {
+            where: { deletedAt: { isNull: true } },
+          },
+          promotions: {
+            where: { deletedAt: { isNull: true } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // 计算折扣价格并构造返回数据
+      const hotelsWithDiscount: HotelWithRelations[] = await Promise.all(
+        hotelList.map(async (hotel) => {
+          const roomTypesWithDiscount: RoomTypeWithDiscount[] = await Promise.all(
+            (hotel.roomTypes ?? []).map(async (rt) => {
+              const activePromos = await getActivePromotions(hotel.id, rt.id);
+              let discountedPrice = Number(rt.price);
+              for (const promo of activePromos) {
+                discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
+              }
+              return {
+                ...rt,
+                discountedPrice: Math.max(0, discountedPrice),
+              };
+            }),
+          );
+
+          return {
+            ...hotel,
+            roomTypes: roomTypesWithDiscount,
+          };
+        }),
+      );
+
+      return { status: 200, body: { hotels: hotelsWithDiscount, total, page } };
     },
 
     get: async ({ params }) => {
@@ -237,17 +307,27 @@ export const createRouter = (db: DbInstance) => {
       });
       if (!hotel) return errorResponse(404, '酒店不存在');
 
-      if (hotel.roomTypes?.length) {
-        for (const rt of hotel.roomTypes) {
+      // 计算折扣价格并构造返回数据
+      const roomTypesWithDiscount: RoomTypeWithDiscount[] = await Promise.all(
+        (hotel.roomTypes ?? []).map(async (rt) => {
           const activePromos = await getActivePromotions(hotel.id, rt.id);
           let discountedPrice = Number(rt.price);
           for (const promo of activePromos) {
             discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
           }
-          (rt as any).discountedPrice = Math.max(0, discountedPrice);
-        }
-      }
-      return { status: 200, body: hotel };
+          return {
+            ...rt,
+            discountedPrice: Math.max(0, discountedPrice),
+          };
+        }),
+      );
+
+      const hotelDetail: HotelDetail = {
+        ...hotel,
+        roomTypes: roomTypesWithDiscount,
+      };
+
+      return { status: 200, body: hotelDetail };
     },
 
     update: async ({ params, body, request }) => {

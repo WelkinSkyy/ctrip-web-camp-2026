@@ -16,9 +16,14 @@ import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { initClient } from '@ts-rest/core';
+import * as v from 'valibot';
 
 // 导入 ts-rest 契约
-import { contract } from 'esu-types';
+import { contract, HotelWithRelationsSchema, RoomTypeWithDiscountSchema } from 'esu-types';
+
+// 从 Valibot Schema 推断类型
+type HotelWithRelations = v.InferOutput<typeof HotelWithRelationsSchema>;
+type RoomTypeWithDiscount = v.InferOutput<typeof RoomTypeWithDiscountSchema>;
 
 // 导入真正的路由处理器工厂
 import { createRouter } from './router-factory.js';
@@ -456,6 +461,261 @@ describe('酒店模块', () => {
       expect(result.status).toBe(200);
       if (result.status === 200) {
         expect(result.body.hotels.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('关键词搜索 - 按名称搜索', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '测试酒店' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.nameZh).toContain('测试酒店');
+        });
+      }
+    });
+
+    it('关键词搜索 - 按地址搜索', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '北京' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+        const found = result.body.hotels.some((h: HotelWithRelations) => h.address.includes('北京'));
+        expect(found).toBe(true);
+      }
+    });
+
+    it('关键词搜索 - 按标签搜索', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '亲子' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        const found = result.body.hotels.some((h: HotelWithRelations) => h.tags && h.tags.includes('亲子'));
+        expect(found).toBe(true);
+      }
+    });
+
+    it('关键词搜索 - 多关键词AND逻辑', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '北京 商务' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        const hotel = result.body.hotels.find(
+          (h: HotelWithRelations) => h.address.includes('北京') && h.tags?.includes('商务'),
+        );
+        expect(hotel).toBeDefined();
+      }
+    });
+
+    it('关键词搜索 - 无匹配结果返回空列表', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '不存在的酒店名称xyz123' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels).toEqual([]);
+        expect(result.body.total).toBe(0);
+      }
+    });
+
+    it('星级筛选', async () => {
+      const result = await client.hotels.list({
+        query: { starRating: '4' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.starRating).toBe(4);
+        });
+      }
+    });
+
+    it('星级筛选 - 无匹配返回空列表', async () => {
+      const result = await client.hotels.list({
+        query: { starRating: '5' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels).toEqual([]);
+        expect(result.body.total).toBe(0);
+      }
+    });
+
+    it('设施筛选', async () => {
+      await db
+        .update(hotels)
+        .set({ facilities: ['停车场', '餐厅', '健身房'] })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: { facilities: ['停车场', '餐厅'] },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.facilities).toContain('停车场');
+          expect(hotel.facilities).toContain('餐厅');
+        });
+      }
+    });
+
+    it('设施筛选 - 部分匹配', async () => {
+      await db
+        .update(hotels)
+        .set({ facilities: ['停车场'] })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: { facilities: ['停车场', '游泳池'] },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          const hasAny = hotel.facilities?.some((f: string) => ['停车场', '游泳池'].includes(f));
+          expect(hasAny).toBe(true);
+        });
+      }
+    });
+
+    it('价格区间筛选 - 最低价格', async () => {
+      const result = await client.hotels.list({
+        query: { priceMin: '300' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          const hasRoomInRange = hotel.roomTypes?.some((rt: RoomTypeWithDiscount) => Number(rt.price) >= 300);
+          expect(hasRoomInRange).toBe(true);
+        });
+      }
+    });
+
+    it('价格区间筛选 - 最高价格', async () => {
+      const result = await client.hotels.list({
+        query: { priceMax: '500' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          const hasRoomInRange = hotel.roomTypes?.some((rt: RoomTypeWithDiscount) => Number(rt.price) <= 500);
+          expect(hasRoomInRange).toBe(true);
+        });
+      }
+    });
+
+    it('价格区间筛选 - 价格区间', async () => {
+      const result = await client.hotels.list({
+        query: { priceMin: '300', priceMax: '500' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        const found = result.body.hotels.some((h: HotelWithRelations) => h.id === testData.hotel.id);
+        expect(found).toBe(true);
+      }
+    });
+
+    it('价格区间筛选 - 无匹配返回空列表', async () => {
+      const result = await client.hotels.list({
+        query: { priceMin: '10000' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels).toEqual([]);
+        expect(result.body.total).toBe(0);
+      }
+    });
+
+    it('多条件组合筛选', async () => {
+      await db
+        .update(hotels)
+        .set({ facilities: ['停车场', '餐厅'] })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: {
+          keyword: '北京',
+          starRating: '4',
+          facilities: ['停车场'],
+          priceMin: '300',
+          priceMax: '500',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+        const hotel = result.body.hotels[0] as HotelWithRelations;
+        expect(hotel.address).toContain('北京');
+        expect(hotel.starRating).toBe(4);
+        expect(hotel.facilities).toContain('停车场');
+      }
+    });
+
+    it('分页 - 第一页', async () => {
+      const result = await client.hotels.list({
+        query: { page: '1', limit: '1' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeLessThanOrEqual(1);
+        expect(result.body.page).toBe(1);
+      }
+    });
+
+    it('分页 - 超出范围返回空列表', async () => {
+      const result = await client.hotels.list({
+        query: { page: '100', limit: '10' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels).toEqual([]);
+        expect(result.body.page).toBe(100);
+      }
+    });
+
+    it('待审核酒店不在列表中', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '待审核' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        const found = result.body.hotels.some((h: HotelWithRelations) => h.status !== 'approved');
+        expect(found).toBe(false);
+      }
+    });
+
+    it('返回数据包含折扣价格', async () => {
+      const result = await client.hotels.list({});
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 0) {
+        const hotel = result.body.hotels[0] as HotelWithRelations;
+        if (hotel.roomTypes && hotel.roomTypes.length > 0) {
+          expect(hotel.roomTypes[0]).toHaveProperty('discountedPrice');
+        }
       }
     });
   });

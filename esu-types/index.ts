@@ -105,17 +105,17 @@ export const PartialHotelSchema = v.partial(HotelSchema);
 export const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status', 'deletedAt', 'statusDescription', 'averageRating', 'ratingCount']);
 
 export const HotelListRequestSchema = v.object({
-  keyword: v.optional(v.string()), // 关键字
+  keyword: v.optional(v.string()),
   checkIn: v.optional(v.pipe(v.string(), v.isoDate())),
   checkOut: v.optional(v.pipe(v.string(), v.isoDate())),
-  starRating: v.optional(v.pipe(v.number(), v.integer())),
+  // 使用 v.string() + v.toNumber() 转换
+  starRating: v.optional(v.pipe(v.string(), v.toNumber(), v.integer())),
   facilities: v.optional(v.array(v.string())),
-  priceMin: v.optional(v.number()),
-  priceMax: v.optional(v.number()),
-  page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-}); // Request query: 筛选参数，支持分页
-export const HotelListResponseSchema = v.object({ hotels: v.array(HotelSchema), total: v.number(), page: v.number() });
+  priceMin: v.optional(v.pipe(v.string(), v.toNumber())),
+  priceMax: v.optional(v.pipe(v.string(), v.toNumber())),
+  page: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
+});
 
 export const HotelAdminListRequestSchema = v.object({
   status: v.optional(HotelSchema.entries.status),
@@ -218,6 +218,44 @@ export const CarouselItemSchema = v.object({
 
 // 轮播图响应 Schema
 export const CarouselResponseSchema = v.array(CarouselItemSchema);
+
+// 房型带折扣价格 Schema
+export const RoomTypeWithDiscountSchema = v.intersect([
+  RoomTypeSchema,
+  v.object({
+    discountedPrice: v.optional(v.number()),
+  }),
+]);
+
+// 酒店带关联数据 Schema（用于列表响应）
+export const HotelWithRelationsSchema = v.intersect([
+  HotelSchema,
+  v.object({
+    roomTypes: v.optional(v.array(RoomTypeWithDiscountSchema)),
+    promotions: v.optional(v.array(PromotionSchema)),
+  }),
+]);
+
+// 酒店列表响应 Schema
+export const HotelListResponseSchema = v.object({ 
+  hotels: v.array(HotelWithRelationsSchema), 
+  total: v.number(), 
+  page: v.number() 
+});
+
+// 酒店详情响应 Schema（包含 owner 信息）
+export const HotelDetailSchema = v.intersect([
+  HotelSchema,
+  v.object({
+    roomTypes: v.optional(v.array(RoomTypeWithDiscountSchema)),
+    promotions: v.optional(v.array(PromotionSchema)),
+    owner: v.nullable(v.object({
+      id: v.number(),
+      username: v.string(),
+      role: v.picklist(roleType),
+    })),
+  }),
+]);
 
 // 3. API定义 (ts-rest格式，整合Valibot schemas)
 // 导入ts-rest（假设环境已安装）
