@@ -75,8 +75,7 @@ const tokens = {
  * 使用 ts-rest 的类型安全客户端进行 API 测试
  */
 const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
-  // 自定义 API fetcher 函数，使用 Fastify 的 inject 方法
-  // ts-rest 的 clientArgs.api 参数格式
+  // 导入 ApiFetcher 类型
   type ApiFetcherArgs = {
     route: unknown;
     path: string;
@@ -89,8 +88,12 @@ const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
     fetchOptions?: unknown;
     validateResponse?: boolean;
   };
+
+  // 自定义 API fetcher 函数，使用 Fastify 的 inject 方法
+  // 符合 ts-rest 的 ApiFetcher 类型签名
   const apiFetcher = async (args: ApiFetcherArgs) => {
     const { path, method, headers, body } = args;
+
     // 使用 Fastify inject 发送请求
     const response = await fastifyApp.inject({
       method: method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
@@ -110,10 +113,10 @@ const createTestClient = (fastifyApp: ReturnType<typeof Fastify>) => {
   };
 
   // 创建 ts-rest 客户端
-  // 使用 api 参数提供自定义 fetcher
+  // 由于 apiFetcher 符合 ApiFetcher 类型签名，不需要类型断言
   return initClient(contract, {
     baseUrl: 'http://localhost', // 提供 base URL
-    api: apiFetcher, // ts-rest 使用 api 参数而不是 customFetch
+    api: apiFetcher,
   });
 };
 
@@ -144,7 +147,7 @@ const cleanDatabase = async () => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query(`
-      TRUNCATE TABLE bookings, promotions, room_types, hotels, users
+      TRUNCATE TABLE ratings, bookings, promotions, room_types, hotels, users
       RESTART IDENTITY CASCADE
     `);
   } finally {
@@ -188,17 +191,25 @@ const seedTestData = async () => {
         nameZh: '测试酒店A',
         ownerId: merchant.id,
         address: '北京市测试路1号',
+        latitude: 39.9042,
+        longitude: 116.4074,
         starRating: 4,
         openingDate: '2020-01-01',
         status: 'approved',
+        images: ['https://example.com/hotel-a-1.jpg', 'https://example.com/hotel-a-2.jpg'],
+        tags: ['亲子', '商务'],
       },
       {
         nameZh: '待审核酒店',
         ownerId: merchant.id,
         address: '上海市测试路2号',
+        latitude: 31.2304,
+        longitude: 121.4737,
         starRating: 3,
         openingDate: '2021-01-01',
         status: 'pending',
+        images: ['https://example.com/hotel-b-1.jpg'],
+        tags: ['度假'],
       },
     ])
     .returning();
@@ -294,7 +305,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // 先关闭 Fastify 应用
   await app.close();
+  // 再关闭数据库连接池
   await pool.end();
 });
 
@@ -393,12 +406,15 @@ describe('酒店模块', () => {
           nameZh: '新酒店',
           nameEn: null,
           address: '深圳市测试路100号',
+          latitude: null,
+          longitude: null,
           starRating: 5,
           openingDate: '2023-01-01',
           ownerId: testData.merchant.id,
           nearbyAttractions: null,
           images: null,
           facilities: null,
+          tags: null,
         },
         ...authHeaders(tokens.merchant),
       });
@@ -416,12 +432,15 @@ describe('酒店模块', () => {
           nameZh: '测试',
           nameEn: null,
           address: '测试',
+          latitude: null,
+          longitude: null,
           starRating: 3,
           openingDate: '2023-01-01',
           ownerId: testData.customer.id,
           nearbyAttractions: null,
           images: null,
           facilities: null,
+          tags: null,
         },
         ...authHeaders(tokens.customer),
       });
@@ -876,6 +895,200 @@ describe('预订模块', () => {
       });
 
       expect(result.status).toBe(200);
+    });
+  });
+});
+
+// =============================================================================
+// 评分模块测试
+// =============================================================================
+
+describe('评分模块', () => {
+  describe('POST /ratings', () => {
+    it('用户创建评分', async () => {
+      const result = await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 5,
+          comment: '非常棒的酒店！',
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      expect(result.status).toBe(201);
+      if (result.status === 201) {
+        expect(result.body.score).toBe(5);
+        expect(result.body.comment).toBe('非常棒的酒店！');
+      }
+    });
+
+    it('重复评分返回400', async () => {
+      // 先创建一个评分
+      await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 4,
+          comment: null,
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      // 再次评分
+      const result = await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 3,
+          comment: null,
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      expect(result.status).toBe(400);
+    });
+
+    it('酒店不存在返回404', async () => {
+      const result = await client.ratings.create({
+        body: {
+          hotelId: 9999,
+          score: 5,
+          comment: null,
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      expect(result.status).toBe(404);
+    });
+  });
+
+  describe('GET /ratings', () => {
+    it('获取评分列表', async () => {
+      const result = await client.ratings.list({});
+
+      expect(result.status).toBe(200);
+    });
+
+    it('按酒店筛选', async () => {
+      const result = await client.ratings.list({
+        query: { hotelId: testData.hotel.id },
+      });
+
+      expect(result.status).toBe(200);
+    });
+  });
+
+  describe('GET /ratings/:id', () => {
+    it('获取评分详情', async () => {
+      // 先创建评分
+      const createResult = await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 4,
+          comment: '测试评论',
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      if (createResult.status === 201) {
+        const result = await client.ratings.get({
+          params: { id: String(createResult.body.id) },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200) {
+          expect(result.body.score).toBe(4);
+        }
+      }
+    });
+
+    it('评分不存在返回404', async () => {
+      const result = await client.ratings.get({
+        params: { id: '9999' },
+      });
+
+      expect(result.status).toBe(404);
+    });
+  });
+
+  describe('PUT /ratings/:id', () => {
+    it('用户修改自己的评分', async () => {
+      // 先创建评分
+      const createResult = await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 3,
+          comment: '原始评论',
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      if (createResult.status === 201) {
+        const result = await client.ratings.update({
+          params: { id: String(createResult.body.id) },
+          body: { score: 4, comment: '修改后的评论' },
+          ...authHeaders(tokens.customer),
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200) {
+          expect(result.body.score).toBe(4);
+          expect(result.body.comment).toBe('修改后的评论');
+        }
+      }
+    });
+  });
+
+  describe('DELETE /ratings/:id', () => {
+    it('用户删除自己的评分', async () => {
+      // 先创建评分
+      const createResult = await client.ratings.create({
+        body: {
+          hotelId: testData.hotel.id,
+          score: 2,
+          comment: null,
+        },
+        ...authHeaders(tokens.customer),
+      });
+
+      if (createResult.status === 201) {
+        const result = await client.ratings.delete({
+          params: { id: String(createResult.body.id) },
+          ...authHeaders(tokens.customer),
+        });
+
+        expect(result.status).toBe(200);
+      }
+    });
+  });
+});
+
+// =============================================================================
+// 轮播图模块测试
+// =============================================================================
+
+describe('轮播图模块', () => {
+  describe('GET /carousel', () => {
+    it('获取轮播图列表', async () => {
+      const result = await client.carousel.list({});
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        // 测试酒店有图片，应该出现在轮播图中
+        expect(result.body.length).toBeGreaterThan(0);
+        // 检查返回的数据结构
+        expect(result.body[0]).toHaveProperty('hotelId');
+        expect(result.body[0]).toHaveProperty('image');
+      }
+    });
+
+    it('限制返回数量', async () => {
+      const result = await client.carousel.list({
+        query: { limit: '1' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.length).toBeLessThanOrEqual(1);
+      }
     });
   });
 });

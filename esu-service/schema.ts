@@ -26,6 +26,7 @@ import {
   timestamp, // 时间戳类型
   date, // 日期类型
   pgEnum, // PostgreSQL 枚举类型
+  doublePrecision, // 双精度浮点数（用于经纬度）
 } from 'drizzle-orm/pg-core';
 
 // 导入关系定义函数 - Drizzle beta 版使用 defineRelations
@@ -136,11 +137,16 @@ export const users = pgTable('users', {
  * - nameEn: 英文名称，可选
  * - ownerId: 所属商户ID，外键关联users表
  * - address: 酒店地址，必填
+ * - latitude: 纬度，用于地图定位
+ * - longitude: 经度，用于地图定位
  * - starRating: 星级评定，1-5星
  * - openingDate: 开业日期
  * - nearbyAttractions: 附近景点数组
  * - images: 酒店图片URL数组
  * - facilities: 酒店设施数组
+ * - tags: 酒店标签数组（如：亲子、商务、度假等）
+ * - averageRating: 平均评分，0-5分
+ * - ratingCount: 评分总数
  * - status: 酒店状态（pending/approved/rejected/offline）
  * - statusDescription: 状态说明（如拒绝原因）
  */
@@ -152,6 +158,8 @@ export const hotels = pgTable('hotels', {
     .notNull()
     .references(() => users.id),
   address: text('address').notNull(),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
   starRating: integer('star_rating').notNull(),
   openingDate: date('opening_date').notNull(),
   nearbyAttractions: varchar('nearby_attractions', {
@@ -159,6 +167,13 @@ export const hotels = pgTable('hotels', {
   }).array(),
   images: text('images').array(),
   facilities: varchar('facilities', { length: 50 }).array(),
+  tags: varchar('tags', { length: 50 }).array(),
+  averageRating: numeric('average_rating', {
+    mode: 'number',
+    precision: 3,
+    scale: 2,
+  }).default(0),
+  ratingCount: integer('rating_count').default(0),
   status: hotelStatusEnum('status').notNull().default('pending'),
   statusDescription: text('status_description'),
   ...timestamps(),
@@ -294,6 +309,32 @@ export const bookings = pgTable('bookings', {
   ...timestamps(),
 });
 
+/**
+ * 评分表 (ratings)
+ *
+ * 存储用户对酒店的评分和评论。
+ * 每个用户对每个酒店只能评分一次。
+ *
+ * 字段说明：
+ * - id: 自增主键
+ * - userId: 评分用户ID，外键关联users表
+ * - hotelId: 评分酒店ID，外键关联hotels表
+ * - score: 评分，1-5分
+ * - comment: 评论内容，可选
+ */
+export const ratings = pgTable('ratings', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  hotelId: integer('hotel_id')
+    .notNull()
+    .references(() => hotels.id),
+  score: integer('score').notNull(),
+  comment: text('comment'),
+  ...timestamps(),
+});
+
 // =============================================================================
 // 关系定义（使用 Drizzle ORM beta 版 defineRelations API）
 // =============================================================================
@@ -321,6 +362,7 @@ export const relations = defineRelations(
     promotions,
     roomTypePromotion,
     bookings,
+    ratings,
   },
   // 第二个参数：关系定义回调函数
   (r) => ({
@@ -331,11 +373,13 @@ export const relations = defineRelations(
      * - 拥有多家酒店（作为商户）
      * - 创建多个预订（作为普通用户）
      * - 创建多个优惠活动
+     * - 创建多个评分
      */
     users: {
       hotels: r.many.hotels(),
       bookings: r.many.bookings(),
       promotions: r.many.promotions(),
+      ratings: r.many.ratings(),
     },
 
     /**
@@ -346,6 +390,7 @@ export const relations = defineRelations(
      * - 有多个房型
      * - 可能有多个关联优惠
      * - 有多个预订记录
+     * - 有多个评分记录
      */
     hotels: {
       // 一对一：酒店属于一个商户
@@ -359,6 +404,8 @@ export const relations = defineRelations(
       promotions: r.many.promotions(),
       // 一对多：酒店有多个预订
       bookings: r.many.bookings(),
+      // 一对多：酒店有多个评分
+      ratings: r.many.ratings(),
     },
 
     /**
@@ -457,6 +504,26 @@ export const relations = defineRelations(
       promotion: r.one.promotions({
         from: r.bookings.promotionId,
         to: r.promotions.id,
+      }),
+    },
+
+    /**
+     * 评分表关系
+     *
+     * 一个评分：
+     * - 属于一个用户
+     * - 关联一个酒店
+     */
+    ratings: {
+      // 一对一：评分属于一个用户
+      user: r.one.users({
+        from: r.ratings.userId,
+        to: r.users.id,
+      }),
+      // 一对一：评分关联一个酒店
+      hotel: r.one.hotels({
+        from: r.ratings.hotelId,
+        to: r.hotels.id,
       }),
     },
   }),

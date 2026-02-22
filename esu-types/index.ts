@@ -27,6 +27,20 @@ export const roleType = ['customer', 'merchant', 'admin'] as const;
 // 导入Valibot（假设环境已安装）
 import * as v from 'valibot';
 
+// 通用错误响应 Schema
+export const ErrorResponseSchema = v.object({
+  message: v.string(),
+});
+
+// 通用错误响应定义（用于 ts-rest commonResponses）
+export const CommonResponseErrors = {
+  400: ErrorResponseSchema,
+  401: ErrorResponseSchema,
+  403: ErrorResponseSchema,
+  404: ErrorResponseSchema,
+  500: ErrorResponseSchema,
+};
+
 export const vTimestamps = () => ({
   createdAt: v.date('无效日期'), // 创建时间
   updatedAt: v.date('无效日期'), // 更新时间
@@ -34,17 +48,6 @@ export const vTimestamps = () => ({
 })
 
 export const ParamIdSchema = v.pipe(v.string(), v.toNumber(), v.integer());
-
-// 通用错误响应 Schema
-export const ErrorResponseSchema = v.object({message: v.string()});
-
-const CommonResponseErrors = {
-    400: ErrorResponseSchema,
-    401: ErrorResponseSchema,
-    403: ErrorResponseSchema,
-    404: ErrorResponseSchema,
-    500: ErrorResponseSchema,
-  };
 
 // 用户Schema（基于原始，移除password在响应中）
 export const UserSchema = v.object({
@@ -81,11 +84,16 @@ export const HotelSchema = v.object({
   nameEn: v.nullable(v.string()), // 英文名，可选
   ownerId: v.pipe(v.number(), v.integer(), v.minValue(1, 'ID不能为空')), // 所属商户ID
   address: v.pipe(v.string(), v.minLength(1)), // 地址
+  latitude: v.nullable(v.pipe(v.number(), v.minValue(-90), v.maxValue(90))), // 纬度
+  longitude: v.nullable(v.pipe(v.number(), v.minValue(-180), v.maxValue(180))), // 经度
   starRating: v.pipe(v.number(), v.integer(), v.minValue(1, '星级至少1'), v.maxValue(5, '星级最多5')), // 星级
   openingDate: v.pipe(v.string(), v.isoDate('无效开业日期')), // 开业日期
   nearbyAttractions: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
   images: v.nullable(v.array(v.pipe(v.string(), v.url('无效URL')))), // 图片
-  facilities: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 附近景点
+  facilities: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 酒店设施
+  tags: v.nullable(v.array(v.pipe(v.string(), v.minLength(1, '最少输入一个字符'), v.maxLength(50, '最多输入50个字符')))), // 酒店标签
+  averageRating: v.nullable(v.pipe(v.number(), v.minValue(0), v.maxValue(5))), // 平均评分
+  ratingCount: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))), // 评分总数
   status: v.picklist(hotelStatus, '无效状态'), // 状态
   statusDescription: v.nullable(v.string()), // 状态说明
   ...vTimestamps()
@@ -94,9 +102,8 @@ export const HotelSchema = v.object({
 // 酒店创建/更新 Partial Schema
 export const PartialHotelSchema = v.partial(HotelSchema);
 
-export const HotelCreateRequestSchema = v.omit(HotelSchema, [
-  'id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'statusDescription'
-]);
+export const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status', 'deletedAt', 'statusDescription', 'averageRating', 'ratingCount']);
+
 export const HotelListRequestSchema = v.object({
   keyword: v.optional(v.string()), // 关键字
   checkIn: v.optional(v.pipe(v.string(), v.isoDate())),
@@ -144,10 +151,7 @@ export const PromotionSchema = v.object({
   description: v.nullable(v.string()),
   ...vTimestamps()
 });
-// 创建专门的请求Schema
-export const PromotionCreateRequestSchema = v.omit(PromotionSchema, [
-  'id', 'createdAt', 'updatedAt', 'deletedAt', 'ownerId'
-]);
+
 // 优惠创建/更新 Partial
 export const PartialPromotionSchema = v.partial(PromotionSchema);
 
@@ -165,8 +169,8 @@ export const BookingSchema = v.object({
   ...vTimestamps()
 });
 
-// 预订创建 Schema（无ID、时间、status默认pending）
-export const BookingCreateSchema = v.omit(BookingSchema, ['id', 'userId', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice']); // totalPrice后端计算
+// 预订创建 Schema（无ID、时间、status默认pending，userId从token获取）
+export const BookingCreateSchema = v.omit(BookingSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'status', 'totalPrice', 'userId']); // totalPrice后端计算，userId从token获取
 
 export const BookingListRequestSchema = v.object({
   status: v.optional(v.picklist(bookingStatus)),
@@ -186,6 +190,34 @@ export const BookingAdminListRequestSchema = v.object({
   page: v.optional(v.number()),
   limit: v.optional(v.number()),
 });
+
+// 评分Schema（新增）
+export const RatingSchema = v.object({
+  id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  userId: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  hotelId: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  score: v.pipe(v.number(), v.integer(), v.minValue(1, '评分最低1分'), v.maxValue(5, '评分最高5分')),
+  comment: v.nullable(v.pipe(v.string(), v.maxLength(500, '评论最多500字符'))),
+  ...vTimestamps()
+});
+
+// 评分创建 Schema（无ID、时间，userId从token获取）
+export const RatingCreateSchema = v.omit(RatingSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'userId']);
+
+// 评分列表响应 Schema
+export const RatingListResponseSchema = v.object({
+  ratings: v.array(RatingSchema),
+  total: v.number(),
+});
+
+// 轮播图项 Schema
+export const CarouselItemSchema = v.object({
+  hotelId: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  image: v.pipe(v.string(), v.url('无效URL')),
+});
+
+// 轮播图响应 Schema
+export const CarouselResponseSchema = v.array(CarouselItemSchema);
 
 // 3. API定义 (ts-rest格式，整合Valibot schemas)
 // 导入ts-rest（假设环境已安装）
@@ -220,9 +252,11 @@ export const usersContract = c.router({
       200: UserResponseSchema, // Response: 当前用户信息
     },
     summary: '获取当前登录用户信息（需token）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] as const}, // Permission: 所有角色
+    metadata: { permission: ['customer', 'merchant', 'admin'] }, // Permission: 所有角色
   },
-}, {commonResponses: CommonResponseErrors});
+}, {
+  commonResponses: CommonResponseErrors,
+});
 
 export const hotelsContract = c.router({
   create: {
@@ -233,7 +267,7 @@ export const hotelsContract = c.router({
       201: HotelSchema, // Response: 新酒店
     },
     summary: '创建酒店（商户自动ownerId，管理员指定）',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
   list: {
     method: 'GET',
@@ -264,18 +298,18 @@ export const hotelsContract = c.router({
       200: HotelSchema,
     },
     summary: '编辑酒店（商户仅自己的，pending/rejected可编，admin无限）',
-    metadata: { permission: ['merchant', 'admin'] as const },
+    metadata: { permission: ['merchant', 'admin'] },
   },
   approve: {
     method: 'POST',
     path: '/hotels/:id/approve',
-    body: v.object({}),
+    body: v.any(),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员审核通过（status → approved）',
-    metadata: { permission: ['admin'] as const },
+    metadata: { permission: ['admin'] },
   },
   reject: {
     method: 'PUT',
@@ -286,29 +320,29 @@ export const hotelsContract = c.router({
       200: HotelSchema,
     },
     summary: '管理员审核不通过',
-    metadata: { permission: ['admin'] as const },
+    metadata: { permission: ['admin'] },
   },
   offline: {
     method: 'PUT',
     path: '/hotels/:id/offline',
-    body: v.object({}),
+    body: v.any(),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员下线（status → offline，可恢复）',
-    metadata: { permission: ['admin']  as const },
+    metadata: { permission: ['admin'] },
   },
   online: {
     method: 'PUT',
     path: '/hotels/:id/online',
-    body: v.object({}),
+    body: v.any(),
     pathParams: v.object({ id: ParamIdSchema }),
     responses: {
       200: HotelSchema,
     },
     summary: '管理员恢复上线（status → approved）',
-    metadata: { permission: ['admin'] as const },
+    metadata: { permission: ['admin'] },
   },
   adminList: {
     method: 'GET',
@@ -318,7 +352,7 @@ export const hotelsContract = c.router({
       200: HotelListResponseSchema,
     },
     summary: '管理员酒店列表（支持状态过滤）',
-    metadata: { permission: ['admin'] as const },
+    metadata: { permission: ['admin'] },
   },
   merchantList: {
     method: 'GET',
@@ -331,19 +365,21 @@ export const hotelsContract = c.router({
       200: v.object({ hotels: v.array(HotelSchema), total: v.number() }),
     },
     summary: '商户自己的酒店列表（新增）',
-    metadata: { permission: ['merchant'] as const },
+    metadata: { permission: ['merchant'] },
   },
   delete: {
     method: 'DELETE',
     path: '/hotels/:id',
-    pathParams: v.object({ id: ParamIdSchema }),
+    pathParams: v.object({ id: v.string() }),
     responses: {
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除酒店（软删除，仅admin）',
-    metadata: { permission: ['admin'] as const},
+    metadata: { permission: ['admin'] },
   },
-}, {commonResponses: CommonResponseErrors});
+}, {
+  commonResponses: CommonResponseErrors,
+});
 
 export const roomTypesContract = c.router({
   create: {
@@ -354,7 +390,7 @@ export const roomTypesContract = c.router({
       201: RoomTypeSchema,
     },
     summary: '创建房型（关联酒店，商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
   get: {
     method: 'GET',
@@ -375,7 +411,7 @@ export const roomTypesContract = c.router({
       200: RoomTypeSchema,
     },
     summary: '更新房型（价格等，商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] as const },
+    metadata: { permission: ['merchant', 'admin'] },
   },
   delete: {
     method: 'DELETE',
@@ -385,20 +421,22 @@ export const roomTypesContract = c.router({
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除房型（商户/admin）',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
-}, {commonResponses: CommonResponseErrors});
+}, {
+  commonResponses: CommonResponseErrors,
+});
 
 export const promotionsContract = c.router({
   create: {
     method: 'POST',
     path: '/promotions',
-    body: PromotionCreateRequestSchema,
+    body: v.omit(PromotionSchema, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'ownerId']),
     responses: {
       201: PromotionSchema,
     },
     summary: '创建优惠（关联酒店/房型）',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
   list: {
     method: 'GET',
@@ -421,7 +459,7 @@ export const promotionsContract = c.router({
       200: PromotionSchema,
     },
     summary: '获取单个优惠',
-    metadata: { permission: null },
+    metadata: { permission: '无' },
   },
   update: {
     method: 'PUT',
@@ -432,7 +470,7 @@ export const promotionsContract = c.router({
       200: PromotionSchema,
     },
     summary: '更新优惠',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
   delete: {
     method: 'DELETE',
@@ -442,9 +480,11 @@ export const promotionsContract = c.router({
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除优惠',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
-}, {commonResponses: CommonResponseErrors});
+}, {
+  commonResponses: CommonResponseErrors,
+});
 
 export const bookingsContract = c.router({
   create: {
@@ -455,7 +495,7 @@ export const bookingsContract = c.router({
       201: BookingSchema,
     },
     summary: '创建预订（用户端，检查库存减1，计算价格）',
-    metadata: { permission: ['customer'] as const},
+    metadata: { permission: ['customer'] },
   },
   list: {
     method: 'GET',
@@ -465,7 +505,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '用户自己的预订列表',
-    metadata: { permission: ['customer'] as const},
+    metadata: { permission: ['customer'] },
   },
   adminList: {
     method: 'GET',
@@ -475,7 +515,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '管理员预订列表（所有）',
-    metadata: { permission: ['admin'] as const},
+    metadata: { permission: ['admin'] },
   },
   merchantList: {
     method: 'GET',
@@ -485,7 +525,7 @@ export const bookingsContract = c.router({
       200: BookingListResponseSchema,
     },
     summary: '商户预订列表（自己的酒店）',
-    metadata: { permission: ['merchant'] as const},
+    metadata: { permission: ['merchant'] },
   },
   get: {
     method: 'GET',
@@ -495,43 +535,125 @@ export const bookingsContract = c.router({
       200: BookingSchema,
     },
     summary: '获取单个预订详情（用户/商户/admin根据权限）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] as const},
+    metadata: { permission: ['customer', 'merchant', 'admin'] },
   },
   confirm: {
     method: 'PUT',
     path: '/bookings/:id/confirm',
-    body: v.object({}),
-    pathParams: v.object({ id: ParamIdSchema }),
+    body: v.any(),
+    pathParams: v.object({ id: v.string() }),
     responses: {
       200: BookingSchema,
     },
     summary: '确认预订（商户/admin，status → confirmed）',
-    metadata: { permission: ['merchant', 'admin'] as const},
+    metadata: { permission: ['merchant', 'admin'] },
   },
   cancel: {
     method: 'PUT',
     path: '/bookings/:id/cancel',
-    body: v.object({}),
-    pathParams: v.object({ id: ParamIdSchema }),
+    body: v.any(),
+    pathParams: v.object({ id: v.string() }),
     responses: {
       200: BookingSchema,
     },
     summary: '取消预订（用户/商户/admin，恢复库存，status → cancelled）',
-    metadata: { permission: ['customer', 'merchant', 'admin'] as const},
+    metadata: { permission: ['customer', 'merchant', 'admin'] },
   },
   delete: {
     method: 'DELETE',
     path: '/bookings/:id',
-    pathParams: v.object({ id: ParamIdSchema }),
+    pathParams: v.object({ id: v.string() }),
     responses: {
       200: v.object({ message: v.literal('Deleted') }),
     },
     summary: '删除预订（软删除，仅admin）',
-    metadata: { permission: ['admin'] as const},
+    metadata: { permission: ['admin'] },
   },
-}, {commonResponses: CommonResponseErrors});
+}, {
+  commonResponses: CommonResponseErrors,
+});
+
+// 评分相关 API
+export const ratingsContract = c.router({
+  create: {
+    method: 'POST',
+    path: '/ratings',
+    body: RatingCreateSchema,
+    responses: {
+      201: RatingSchema,
+    },
+    summary: '创建评分（用户对酒店评分，每个用户对每个酒店只能评一次）',
+    metadata: { permission: ['customer'] },
+  },
+  list: {
+    method: 'GET',
+    path: '/ratings',
+query: v.object({
+  hotelId: v.optional(v.pipe(v.string(), v.toNumber(), v.integer())),
+  page: v.optional(v.pipe(v.string(), v.toNumber(), v.integer())),
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer())),
+}),
+    responses: {
+      200: RatingListResponseSchema,
+    },
+    summary: '获取评分列表（可按酒店筛选）',
+    metadata: { permission: null },
+  },
+  get: {
+    method: 'GET',
+    path: '/ratings/:id',
+    pathParams: v.object({ id: ParamIdSchema }),
+    responses: {
+      200: RatingSchema,
+    },
+    summary: '获取单个评分详情',
+    metadata: { permission: null },
+  },
+  update: {
+    method: 'PUT',
+    path: '/ratings/:id',
+    pathParams: v.object({ id: ParamIdSchema }),
+    body: v.partial(RatingCreateSchema),
+    responses: {
+      200: RatingSchema,
+    },
+    summary: '更新评分（仅评分者本人可修改）',
+    metadata: { permission: ['customer'] },
+  },
+  delete: {
+    method: 'DELETE',
+    path: '/ratings/:id',
+    pathParams: v.object({ id: ParamIdSchema }),
+    responses: {
+      200: v.object({ message: v.literal('Deleted') }),
+    },
+    summary: '删除评分（评分者本人或管理员）',
+    metadata: { permission: ['customer', 'admin'] },
+  },
+}, {
+  commonResponses: CommonResponseErrors,
+});
+
+// 轮播图相关 API
+export const carouselContract = c.router({
+  list: {
+    method: 'GET',
+    path: '/carousel',
+query: v.object({
+  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
+}),
+    responses: {
+      200: CarouselResponseSchema,
+    },
+    summary: '获取轮播图列表（返回有图片的酒店，用于前端首页轮播）',
+    metadata: { permission: null },
+  },
+}, {
+  commonResponses: CommonResponseErrors,
+});
 
 // 完整API合约
+// 使用 commonResponses 为所有 API 添加统一的错误响应定义
 export const contract = c.router({
   // 用户相关 API
   users: usersContract,
@@ -543,4 +665,11 @@ export const contract = c.router({
   promotions: promotionsContract,
   // 预订相关 API（新增预订系统）
   bookings: bookingsContract,
-}) ;
+  // 评分相关 API
+  ratings: ratingsContract,
+  // 轮播图相关 API
+  carousel: carouselContract,
+}, {
+  // 通用错误响应定义，所有子路由都会继承这些响应状态码
+  commonResponses: CommonResponseErrors,
+});
