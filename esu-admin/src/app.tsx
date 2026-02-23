@@ -1,5 +1,8 @@
+import { useEffect } from 'preact/hooks';
 import { LocationProvider, Router, Route } from 'preact-iso';
 import { currentUser } from './store';
+import { clearToken, getToken } from './api/request';
+import { me } from './api/auth';
 import Login from './pages/Login';
 import HotelEdit from './pages/HotelEdit';
 import AuditList from './pages/AuditList';
@@ -11,8 +14,21 @@ const _LocationProvider = LocationProvider as any;
 const _Router = Router as any;
 const _Route = Route as any;
 
+function mapRole(role: string): 'merchant' | 'admin' {
+  return role === 'admin' ? 'admin' : 'merchant';
+}
+
 export function App() {
   const user = currentUser.value;
+
+  useEffect(() => {
+    if (user || !getToken()) return;
+    me()
+      .then((u) => {
+        currentUser.value = { id: String(u.id), name: u.username, role: mapRole(u.role) };
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <_LocationProvider>
@@ -33,7 +49,7 @@ export function App() {
               </nav>
               <div className="app-user">
                 <span className="app-user-name">{user.name} ({user.role})</span>
-                <button type="button" onClick={() => { currentUser.value = null; window.location.href = '/'; }} className="app-logout-btn">退出</button>
+                <button type="button" onClick={() => { currentUser.value = null; clearToken(); window.location.href = '/login'; }} className="app-logout-btn">退出</button>
               </div>
             </div>
           )}

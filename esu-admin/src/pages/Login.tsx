@@ -1,47 +1,62 @@
 import { useState } from 'preact/hooks';
-import { currentUser, registeredUsers, showToast } from '../store';
+import { useLocation } from 'preact-iso';
+import { currentUser, showToast } from '../store';
+import type { Role } from '../store';
+import { login as apiLogin, register as apiRegister } from '../api/auth';
+import { setToken } from '../api/request';
 import './Login.css';
 
-const ADMIN_USERNAME = 'default';
-const ADMIN_PASSWORD = '123';
+function mapRole(role: string): Role {
+  return role === 'admin' ? 'admin' : 'merchant';
+}
 
 export default function Login() {
+  const location = useLocation();
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleAction = () => {
+  const handleAction = async () => {
     if (!username.trim()) return showToast('请输入用户名');
     if (!password) return showToast('请输入密码');
+    if (isRegister && password.length < 6) return showToast('密码至少6位');
 
     const name = username.trim();
-
-    if (isRegister) {
-      // 注册仅支持商户身份，写入已注册列表
-      const id = 'u_' + Date.now();
-      registeredUsers.value = [...registeredUsers.value, { username: name, id, name }];
-      currentUser.value = { id, name, role: 'merchant' };
-      window.location.href = '/merchant';
-      return;
+    setLoading(true);
+    try {
+      if (isRegister) {
+        await apiRegister({ username: name, password, role: 'merchant' });
+        const res = await apiLogin(name, password);
+        setToken(res.token);
+        currentUser.value = {
+          id: String(res.user.id),
+          name: res.user.username,
+          role: mapRole(res.user.role),
+        };
+        location.route('/merchant');
+        return;
+      }
+      const res = await apiLogin(name, password);
+      setToken(res.token);
+      currentUser.value = {
+        id: String(res.user.id),
+        name: res.user.username,
+        role: mapRole(res.user.role),
+      };
+      location.route(res.user.role === 'admin' ? '/admin' : '/merchant');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '请求失败';
+      if (msg.includes('401') || msg.toLowerCase().includes('invalid') || msg.includes('用户') || msg.includes('密码')) {
+        showToast('用户名或密码错误');
+      } else if (msg.includes('exist') || msg.includes('已存在') || msg.includes('重复')) {
+        showToast('该账号已注册');
+      } else {
+        showToast(msg);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    // 登录：仅 default / 123 为管理员
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      currentUser.value = { id: 'admin_1', name: ADMIN_USERNAME, role: 'admin' };
-      window.location.href = '/admin';
-      return;
-    }
-    if (username === ADMIN_USERNAME && password !== ADMIN_PASSWORD) {
-      return showToast('密码错误');
-    }
-
-    // 商户登录：校验是否已注册
-    const registered = registeredUsers.value.find((u) => u.username === name);
-    if (!registered) {
-      return showToast('请先注册');
-    }
-    currentUser.value = { id: registered.id, name: registered.name, role: 'merchant' };
-    window.location.href = '/merchant';
   };
 
   return (
@@ -61,6 +76,7 @@ export default function Login() {
               value={username}
               onInput={(e) => setUsername(e.currentTarget.value)}
               placeholder="输入账号"
+              disabled={loading}
             />
           </div>
 
@@ -72,15 +88,16 @@ export default function Login() {
               autoComplete={isRegister ? 'new-password' : 'current-password'}
               value={password}
               onInput={(e) => setPassword(e.currentTarget.value)}
-              placeholder={isRegister ? '设置密码' : '输入密码'}
+              placeholder={isRegister ? '设置密码（至少6位）' : '输入密码'}
+              disabled={loading}
             />
           </div>
 
-          <button type="button" onClick={handleAction} className="login-submit">
-            {isRegister ? '立即注册' : '登录系统'}
+          <button type="button" onClick={handleAction} className="login-submit" disabled={loading}>
+            {loading ? '处理中…' : isRegister ? '立即注册' : '登录系统'}
           </button>
 
-          <button type="button" onClick={() => setIsRegister(!isRegister)} className="login-toggle">
+          <button type="button" onClick={() => setIsRegister(!isRegister)} className="login-toggle" disabled={loading}>
             {isRegister ? '已有账户？去登录' : '没有账号？去注册'}
           </button>
         </div>

@@ -1,15 +1,38 @@
-import { hotels, currentUser } from '../store';
+import { useEffect, useState } from 'preact/hooks';
+import { hotels, currentUser, showToast } from '../store';
+import { listMerchant, deleteHotel, mapBackendToFrontend } from '../api/hotel';
 import './MerchantList.css';
 
 export default function MerchantList() {
   const user = currentUser.value;
-  
-  // 过滤出当前商户自己的酒店
-  const myHotels = hotels.value.filter(h => h.merchantId === user?.id);
+  const [loading, setLoading] = useState(true);
+  const myHotels = hotels.value;
 
-  const deleteHotel = (id: string) => {
-    if (confirm('确定要删除该酒店录入吗？')) {
-      hotels.value = hotels.value.filter(h => h.id !== id);
+  const load = () => {
+    setLoading(true);
+    listMerchant()
+      .then((res) => {
+        hotels.value = res.hotels.map(mapBackendToFrontend);
+      })
+      .catch((e) => {
+        showToast(e instanceof Error ? e.message : '加载失败');
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (user?.role === 'merchant') load();
+  }, [user?.id]);
+
+  const deleteHotelById = async (id: string) => {
+    if (!confirm('确定要删除该酒店录入吗？')) return;
+    try {
+      await deleteHotel(id);
+      hotels.value = hotels.value.filter((h) => h.id !== id);
+      showToast('已删除');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      showToast(msg.includes('403') || msg.includes('权限') ? '仅管理员可删除酒店' : msg || '删除失败');
     }
   };
 
@@ -30,13 +53,17 @@ export default function MerchantList() {
         </a>
       </div>
 
-      {myHotels.length === 0 ? (
+      {loading ? (
+        <div className="merchant-empty">
+          <p>加载中…</p>
+        </div>
+      ) : myHotels.length === 0 ? (
         <div className="merchant-empty">
           <p>暂无酒店数据，请点击右上角新增</p>
         </div>
       ) : (
         <div className="merchant-grid">
-          {myHotels.map(hotel => (
+          {myHotels.map((hotel) => (
             <div key={hotel.id} className="merchant-card">
               <div className="merchant-card-head">
                 <div>
@@ -53,7 +80,9 @@ export default function MerchantList() {
               <div className="merchant-card-body">
                 <div className="merchant-price-row">
                   <span className="merchant-price-label">预估均价</span>
-                  <span className="merchant-price-value">¥{hotel.price}<small className="merchant-price-unit">起</small></span>
+                  <span className="merchant-price-value">
+                    ¥{hotel.price || '-'}<small className="merchant-price-unit">起</small>
+                  </span>
                 </div>
                 <div className="merchant-tags">
                   {hotel.tags.map((tag, i) => (
@@ -69,7 +98,7 @@ export default function MerchantList() {
 
               <div className="merchant-card-footer">
                 <a href={`/hotel/edit/${hotel.id}`} className="merchant-btn-edit">重新编辑</a>
-                <button type="button" onClick={() => deleteHotel(hotel.id)} className="merchant-btn-delete">删除</button>
+                <button type="button" onClick={() => deleteHotelById(hotel.id)} className="merchant-btn-delete">删除</button>
               </div>
             </div>
           ))}

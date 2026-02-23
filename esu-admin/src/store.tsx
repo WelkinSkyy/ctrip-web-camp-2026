@@ -14,19 +14,9 @@ export interface Hotel {
   merchantId: string;
 }
 
-// 已注册的商户账号（登录时校验用）
-export interface RegisteredUser {
-  username: string;
-  id: string;
-  name: string;
-}
-export const registeredUsers = signal<RegisteredUser[]>([]);
-
-// 全局响应式状态
-export const currentUser = signal<{id: string, name: string, role: Role} | null>(null);
-export const hotels = signal<Hotel[]>([
-  { id: '1', name: '全季酒店-外滩店', address: '上海市黄浦区', price: 599, tags: ['含早', '免费停车'], status: '通过', merchantId: 'm1' }
-]);
+// 全局响应式状态（与后端同步时由各页面拉取后写入 hotels）
+export const currentUser = signal<{ id: string; name: string; role: Role } | null>(null);
+export const hotels = signal<Hotel[]>([]);
 
 // 页面内居中提示（替代 alert）
 export const toastMessage = signal<string | null>(null);
