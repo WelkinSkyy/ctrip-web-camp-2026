@@ -22,6 +22,34 @@
   letter-spacing: -0.02em;
 }
 
+.hotel-edit-loading {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 32px;
+  margin: 0;
+}
+
+.hotel-edit-section {
+  margin-bottom: 28px;
+}
+.hotel-edit-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.hotel-edit-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.hotel-edit-required {
+  color: var(--color-danger, #dc2626);
+  margin-left: 2px;
+}
+
 .hotel-edit-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -107,4 +135,91 @@
 .hotel-edit-cancel:hover {
   background: var(--color-border);
   color: var(--color-text);
+}
+
+/* 房型区块 */
+.hotel-edit-room-desc {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin: 0 0 12px;
+}
+
+.hotel-edit-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hotel-edit-room-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-bg-page, #f8fafc);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+}
+
+.hotel-edit-room-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hotel-edit-room-name { flex: 1; min-width: 120px; }
+.hotel-edit-room-price { width: 100px; }
+.hotel-edit-room-stock { width: 80px; }
+
+.hotel-edit-room-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.hotel-edit-room-name-txt { font-weight: 600; color: var(--color-text); }
+.hotel-edit-room-price-txt { color: var(--color-primary); font-weight: 600; }
+.hotel-edit-room-stock-txt { font-size: 0.875rem; color: var(--color-text-secondary); }
+
+.hotel-edit-room-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hotel-edit-room-btn-edit,
+.hotel-edit-room-btn-delete,
+.hotel-edit-room-btn-save,
+.hotel-edit-room-btn-cancel {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+}
+
+.hotel-edit-room-btn-edit { background: var(--color-border-light); color: var(--color-text); }
+.hotel-edit-room-btn-edit:hover { background: var(--color-border); }
+.hotel-edit-room-btn-delete { background: transparent; color: var(--color-text-muted); }
+.hotel-edit-room-btn-delete:hover { color: var(--color-danger, #dc2626); }
+.hotel-edit-room-btn-save { background: var(--color-primary); color: #fff; }
+.hotel-edit-room-btn-save:hover { filter: brightness(1.05); }
+.hotel-edit-room-btn-cancel { background: var(--color-border-light); color: var(--color-text-secondary); }
+.hotel-edit-room-btn-cancel:hover { background: var(--color-border); }
+
+.hotel-edit-room-add-btn {
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.hotel-edit-room-add-btn:hover {
+  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.08);
 }

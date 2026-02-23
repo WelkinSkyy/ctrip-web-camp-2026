@@ -83,3 +83,37 @@
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* 确认弹层：双按钮 */
+.toast-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.toast-actions .toast-btn {
+  flex: 1;
+}
+
+.toast-btn-cancel {
+  flex: 1;
+  padding: 10px 20px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-border-light);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.toast-btn-cancel:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.toast-btn-cancel:focus-visible {
+  outline: 2px solid var(--color-border);
+  outline-offset: 2px;
+}

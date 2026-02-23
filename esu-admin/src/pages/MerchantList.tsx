@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { hotels, currentUser, showToast } from '../store';
+import { hotels, currentUser, showToast, showConfirm } from '../store';
 import { listMerchant, deleteHotel, mapBackendToFrontend } from '../api/hotel';
 import './MerchantList.css';
 
@@ -24,16 +24,17 @@ export default function MerchantList() {
     if (user?.role === 'merchant') load();
   }, [user?.id]);
 
-  const deleteHotelById = async (id: string) => {
-    if (!confirm('确定要删除该酒店录入吗？')) return;
-    try {
-      await deleteHotel(id);
-      hotels.value = hotels.value.filter((h) => h.id !== id);
-      showToast('已删除');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '';
-      showToast(msg.includes('403') || msg.includes('权限') ? '仅管理员可删除酒店' : msg || '删除失败');
-    }
+  const deleteHotelById = (id: string) => {
+    showConfirm('确定要删除该酒店录入吗？', async () => {
+      try {
+        await deleteHotel(id);
+        hotels.value = hotels.value.filter((h) => h.id !== id);
+        showToast('已删除');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '';
+        showToast(msg.includes('403') || msg.includes('权限') ? '仅管理员可删除酒店' : msg || '删除失败');
+      }
+    });
   };
 
   const statusClass = (status: string) =>

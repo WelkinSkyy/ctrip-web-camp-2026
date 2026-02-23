@@ -21,9 +21,25 @@ export interface ApiError {
 
 async function parseError(res: Response): Promise<string> {
   try {
-    const data = await res.json();
-    return (data as { message?: string }).message || res.statusText || '请求失败';
+    const data = (await res.json()) as Record<string, unknown>;
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.error === 'string') return data.error;
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      const parts = data.errors.map((e: unknown) => (typeof e === 'string' ? e : (e as { message?: string }).message || String(e)));
+      return parts.join('；');
+    }
+    if (Array.isArray(data.issues) && data.issues.length > 0) {
+      const parts = data.issues.map((i: unknown) => {
+        const item = i as { message?: string; path?: unknown };
+        return item.message || JSON.stringify(item.path ?? i);
+      });
+      return parts.join('；');
+    }
+    return res.statusText || '请求失败';
   } catch {
+    if (res.status === 400) {
+      return '请求参数有误：请检查用户名（至少3字符）、密码（至少6位）及格式';
+    }
     return res.statusText || '请求失败';
   }
 }
@@ -34,10 +50,13 @@ export async function request<T>(
 ): Promise<T> {
   const { body, ...init } = options;
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const hasBody = body !== undefined && body !== null;
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
     ...((init.headers as Record<string, string>) || {}),
   };
+  if (hasBody) {
+    (headers as Record<string, string>)['Content-Type'] = 'application/json';
+  }
   const token = getToken();
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
@@ -47,7 +66,7 @@ export async function request<T>(
     res = await fetch(url, {
       ...init,
       headers,
-      body: body !== undefined && body !== null ? JSON.stringify(body) : undefined,
+      body: hasBody ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -59,13 +78,22 @@ export async function request<T>(
     throw e;
   }
   if (res.status === 401) {
-    clearToken();
-    window.location.href = '/login';
-    throw new Error('请先登录');
+    const isLoginOrRegister = path.includes('/users/login') || path.includes('/users/register');
+    if (!isLoginOrRegister) {
+      clearToken();
+      window.location.href = '/login';
+      throw new Error('请先登录');
+    }
+    const message = await parseError(res);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = 401;
+    throw err;
   }
   if (!res.ok) {
     const message = await parseError(res);
-    throw new Error(message);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   if (res.status === 204 || res.headers.get('content-length') === '0') {
     return undefined as T;

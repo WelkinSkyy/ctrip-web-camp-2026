@@ -8,6 +8,7 @@ import HotelEdit from './pages/HotelEdit';
 import AuditList from './pages/AuditList';
 import MerchantList from './pages/MerchantList';
 import { Toast } from './components/Toast';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import './app.css';
 
 const _LocationProvider = LocationProvider as any;
@@ -65,6 +66,7 @@ export function App() {
           </_Router>
         </main>
         <Toast />
+        <ConfirmDialog />
       </div>
     </_LocationProvider>
   );

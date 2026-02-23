@@ -21,14 +21,17 @@ export interface BackendHotel {
   nameEn?: string | null;
   ownerId: number;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   starRating: number;
   openingDate: string;
   nearbyAttractions?: string[] | null;
   images?: string[] | null;
   facilities?: string[] | null;
+  tags?: string[] | null;
   status: 'pending' | 'approved' | 'rejected' | 'offline';
   statusDescription?: string | null;
-  roomTypes?: { price?: number }[];
+  roomTypes?: { id: number; hotelId: number; name: string; price: number; stock: number; capacity?: number | null; description?: string | null }[];
 }
 
 function mapBackendToFrontend(h: BackendHotel): Hotel {
@@ -71,18 +74,42 @@ export function getHotel(id: string): Promise<BackendHotel> {
 
 export interface HotelCreateBody {
   nameZh: string;
-  nameEn?: string | null;
+  nameEn: string | null;
   ownerId?: number;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
   starRating: number;
   openingDate: string;
-  nearbyAttractions?: string[] | null;
-  images?: string[] | null;
-  facilities?: string[] | null;
+  nearbyAttractions: string[] | null;
+  images: string[] | null;
+  facilities: string[] | null;
+  tags: string[] | null;
+}
+
+/** 只保留 YYYY-MM-DD，后端 iso_date 不接收带时间的字符串 */
+function toDateOnly(s: string): string {
+  if (!s) return s;
+  const part = s.split('T')[0];
+  return part && /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : s.slice(0, 10);
 }
 
 export function createHotel(body: HotelCreateBody): Promise<BackendHotel> {
-  return request<BackendHotel>('/hotels', { method: 'POST', body });
+  const payload: Record<string, unknown> = {
+    nameZh: body.nameZh,
+    nameEn: body.nameEn ?? null,
+    address: body.address,
+    latitude: body.latitude ?? null,
+    longitude: body.longitude ?? null,
+    starRating: body.starRating,
+    openingDate: toDateOnly(body.openingDate),
+    nearbyAttractions: body.nearbyAttractions ?? null,
+    images: body.images ?? null,
+    facilities: body.facilities ?? [],
+    tags: body.tags ?? [],
+  };
+  if (body.ownerId != null && body.ownerId >= 1) payload.ownerId = body.ownerId;
+  return request<BackendHotel>('/hotels', { method: 'POST', body: payload });
 }
 
 export function updateHotel(id: string, body: Partial<HotelCreateBody> & { status?: string; statusDescription?: string | null }): Promise<BackendHotel> {

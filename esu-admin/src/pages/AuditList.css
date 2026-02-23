@@ -76,6 +76,9 @@
 .audit-tbody tr:hover {
   background: var(--color-primary-light);
 }
+.audit-row-clickable {
+  cursor: pointer;
+}
 .audit-tbody tr:not(:last-child) td {
   border-bottom: 1px solid var(--color-border-light);
 }
@@ -193,11 +196,202 @@
   color: var(--color-text-muted);
 }
 
+/* 详情弹窗 */
+.audit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  overflow: auto;
+}
+
+.audit-modal {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border-light);
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.audit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+}
+
+.audit-modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.audit-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+.audit-modal-close:hover {
+  color: var(--color-text);
+}
+
+.audit-modal-loading {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.audit-modal-status-row {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.audit-modal-reject-reason {
+  flex: 1;
+  min-width: 200px;
+}
+.audit-modal-reject-reason label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.audit-modal-form {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.audit-modal-field label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.audit-modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s;
+  background: var(--color-bg-card);
+  resize: vertical;
+}
+.audit-modal-input:focus {
+  border-color: var(--color-primary);
+}
+
+.audit-modal-value {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.audit-modal-value--pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.audit-modal-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.audit-modal-room-types {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+.audit-modal-room-types li {
+  margin-bottom: 4px;
+}
+
+.audit-modal-actions {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.audit-modal-btn {
+  padding: 10px 18px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+.audit-modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.audit-modal-btn-approve {
+  background: var(--color-primary);
+  color: #fff;
+}
+.audit-modal-btn-approve:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.audit-modal-btn-reject {
+  background: var(--color-danger-bg, #fef2f2);
+  color: var(--color-danger, #dc2626);
+}
+.audit-modal-btn-reject:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.audit-modal-btn-cancel {
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+.audit-modal-btn-cancel:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+.audit-modal-btn-toggle {
+  background: var(--color-border-light);
+  color: var(--color-text);
+}
+.audit-modal-btn-toggle:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
 /* 表格响应式 */
 @media (max-width: 768px) {
   .audit-thead th,
   .audit-tbody td {
     padding: 12px 16px;
     font-size: 0.8125rem;
+  }
+  .audit-modal-field-row {
+    grid-template-columns: 1fr;
   }
 }

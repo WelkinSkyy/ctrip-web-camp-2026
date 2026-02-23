@@ -23,3 +23,13 @@ export const toastMessage = signal<string | null>(null);
 export function showToast(msg: string) {
   toastMessage.value = msg;
 }
+
+// 确认弹层（替代 confirm），与 Toast 统一样式
+export interface ConfirmOptions {
+  message: string;
+  onConfirm: () => void;
+}
+export const confirmDialog = signal<ConfirmOptions | null>(null);
+export function showConfirm(message: string, onConfirm: () => void) {
+  confirmDialog.value = { message, onConfirm };
+}

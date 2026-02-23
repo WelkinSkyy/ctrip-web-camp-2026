@@ -1,12 +1,17 @@
-import { toastMessage } from '../store';
+import { confirmDialog } from '../store';
 import './Toast.css';
 
-export function Toast() {
-  const msg = toastMessage.value;
-  if (!msg) return null;
+export function ConfirmDialog() {
+  const options = confirmDialog.value;
+  if (!options) return null;
 
   const close = () => {
-    toastMessage.value = null;
+    confirmDialog.value = null;
+  };
+
+  const handleConfirm = () => {
+    options.onConfirm();
+    close();
   };
 
   return (
@@ -14,7 +19,7 @@ export function Toast() {
       className="toast-overlay"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="toast-title"
+      aria-labelledby="confirm-title"
       onClick={close}
     >
       <div className="toast-card" onClick={(e) => e.stopPropagation()}>
@@ -25,10 +30,15 @@ export function Toast() {
             <circle cx="12" cy="17" r="0.9" fill="currentColor" />
           </svg>
         </div>
-        <p id="toast-title" className="toast-text">{msg}</p>
-        <button type="button" className="toast-btn" onClick={close}>
-          确定
-        </button>
+        <p id="confirm-title" className="toast-text">{options.message}</p>
+        <div className="toast-actions">
+          <button type="button" className="toast-btn-cancel" onClick={close}>
+            取消
+          </button>
+          <button type="button" className="toast-btn" onClick={handleConfirm}>
+            确定
+          </button>
+        </div>
       </div>
     </div>
   );
