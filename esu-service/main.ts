@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
+import fastifyCors from '@fastify/cors'
 import fastifyPrintRoutes from 'fastify-print-routes';
 // PostgreSQL 连接池
 import { Pool } from 'pg';
@@ -21,20 +22,11 @@ app.register(fastifyJwt, {
   secret: process.env.JWT_SECRET,
 }); // 生产环境请使用安全的密钥
 
-// 请求钩子：除注册和登录外的所有路由都需要验证 JWT
-// app.addHook('onRequest', async (request, reply) => {
-//   try {
-//     if (
-//       !['/users/register', '/users/login'].includes(
-//         request.url,
-//       )
-//     ) {
-//       await request.jwtVerify();
-//     }
-//   } catch (err) {
-//     reply.code(401).send({ error: '未授权' });
-//   }
-// });
+app.register(fastifyCors, {
+  origin: '*',
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'], 
+  credentials: true
+});
 
 /**
  * PostgreSQL 连接池配置
