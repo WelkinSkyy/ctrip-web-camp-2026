@@ -1,0 +1,247 @@
+@import "../../app.scss";
+
+.op16 {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #f0f4f8 100%);
+  padding-bottom: 120rpx;
+
+  /* 状态标签栏 */
+  .status-tabs {
+    display: flex;
+    padding: $spacing-3 $spacing-4;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(#e5e5e5, 0.5);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+
+    .tab {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      padding: $spacing-2 $spacing-4;
+      margin-right: $spacing-2;
+      border-radius: $radius-full;
+      background-color: $color-bg-secondary;
+      transition: all 0.2s;
+
+      &.active {
+        background-color: $color-primary;
+        color: white;
+        box-shadow: 0 4px 10px rgba($color-primary, 0.3);
+      }
+    }
+  }
+
+  /* 订单列表区域 */
+  .order-scroll {
+    padding: $spacing-4;
+    height: calc(100vh - 120rpx - 100px);
+  }
+
+  /* 订单卡片 */
+  .order-card {
+    display: flex;
+    background-color: $color-bg-card;
+    border-radius: 24rpx;
+    padding: $spacing-4;
+    margin-bottom: $spacing-4;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.02);
+    transition: all 0.3s ease;
+
+    &:active {
+      transform: translateY(-2rpx);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.06), 0 4px 8px rgba(0,0,0,0.02);
+    }
+
+    .hotel-img {
+      width: 180rpx;
+      height: 180rpx;
+      border-radius: 20rpx;
+      margin-right: $spacing-4;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    .order-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: $spacing-1;
+
+        .hotel-name {
+          font-size: $font-size-lg;
+          font-weight: $font-weight-semibold;
+          color: $color-text-primary;
+          line-height: 1.3;
+          flex: 1;
+          margin-right: $spacing-2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .status-badge {
+          padding: 4rpx 16rpx;
+          border-radius: $radius-full;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+
+          .status-text {
+            font-size: $font-size-xs;
+            font-weight: $font-weight-medium;
+          }
+        }
+      }
+
+      .room-type {
+        font-size: $font-size-sm;
+        color: $color-text-secondary;
+        margin-bottom: $spacing-1;
+      }
+
+      .date {
+        font-size: $font-size-xs;
+        color: $color-text-tertiary;
+        margin-bottom: $spacing-2;
+      }
+
+      .price-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .total-price {
+          font-size: $font-size-xl;
+          font-weight: $font-weight-bold;
+          color: $color-primary;
+        }
+
+        .actions {
+          display: flex;
+          gap: $spacing-2;
+
+          .action-btn {
+            font-size: $font-size-xs;
+            padding: $spacing-1 $spacing-3;
+            border-radius: $radius-full;
+            background-color: $color-bg-secondary;
+            color: $color-text-secondary;
+            transition: all 0.2s;
+
+            &.cancel {
+              background-color: rgba($color-error, 0.1);
+              color: $color-error;
+              border: 1px solid $color-error;
+            }
+            &.contact {
+              background-color: rgba($color-score-bg, 0.1);
+              color: $color-score-bg;
+              border: 1px solid $color-score-bg;
+            }
+            &.review {
+              background-color: rgba($color-primary, 0.1);
+              color: $color-primary;
+              border: 1px solid $color-primary;
+            }
+
+            &:active {
+              transform: scale(0.96);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* 空状态 */
+  .empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    padding: $spacing-8;
+
+    .empty-image {
+      width: 240rpx;
+      height: 240rpx;
+      margin-bottom: $spacing-4;
+      opacity: 0.8;
+    }
+
+    .empty-text {
+      font-size: $font-size-xl;
+      font-weight: $font-weight-semibold;
+      color: $color-text-primary;
+      margin-bottom: $spacing-2;
+    }
+
+    .empty-tip {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+      margin-bottom: $spacing-6;
+    }
+
+    .empty-actions {
+      display: flex;
+      gap: $spacing-4;
+
+      .btn {
+        padding: $spacing-3 $spacing-6;
+        border-radius: $radius-full;
+        font-size: $font-size-md;
+        font-weight: $font-weight-medium;
+        transition: all 0.2s;
+
+        &.primary {
+          background-color: $color-primary;
+          color: white;
+          box-shadow: 0 4px 12px rgba($color-primary, 0.3);
+        }
+        &.secondary {
+          background-color: $color-bg-card;
+          color: $color-text-primary;
+          border: 1px solid $color-border-light;
+        }
+
+        &:active {
+          transform: translateY(2rpx);
+          box-shadow: none;
+        }
+      }
+    }
+  }
+
+  /* 列表内空状态 */
+  .empty-in-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-10;
+
+    .empty-text {
+      font-size: $font-size-md;
+      color: $color-text-tertiary;
+    }
+  }
+
+  /* 加载和没有更多提示 */
+  .loading-container, .no-more-container {
+    padding: $spacing-4;
+    text-align: center;
+
+    .loading-text, .no-more-text {
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+  }
+}

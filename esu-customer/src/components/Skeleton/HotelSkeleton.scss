@@ -1,0 +1,40 @@
+@import "../../app.scss";
+
+.hotel-skeleton {
+  display: flex;
+  padding: $spacing-3 $spacing-4;
+  background-color: $color-bg-card;
+  border-radius: $radius-md;
+  margin-bottom: $spacing-3;
+  animation: pulse 1.5s ease-in-out infinite;
+
+  .skeleton-img {
+    width: 240rpx;
+    height: 160rpx;
+    background-color: $color-border-light;
+    border-radius: $radius-sm;
+    margin-right: $spacing-3;
+  }
+
+  .skeleton-info {
+    flex: 1;
+
+    .skeleton-line {
+      background-color: $color-border-light;
+      height: 20rpx;
+      border-radius: $radius-full;
+      margin-bottom: $spacing-2;
+
+      &.title { width: 60%; height: 28rpx; }
+      &.meta { width: 80%; }
+      &.tags { width: 70%; }
+      &.price { width: 40%; }
+    }
+  }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}

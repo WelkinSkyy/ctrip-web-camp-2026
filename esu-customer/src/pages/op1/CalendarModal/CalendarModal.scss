@@ -1,0 +1,186 @@
+@import "../../../app.scss";
+
+.calendar-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;            // 底部对齐
+  justify-content: center;
+  z-index: 1000;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transition: opacity $transition-base;
+  pointer-events: none;              // 默认不可点击
+
+  &.active {
+    opacity: 1;
+    pointer-events: auto;            // 激活后可点击
+  }
+
+  .calendar-modal-content {
+    width: 100%;
+    background-color: white;
+    border-radius: $radius-lg $radius-lg 0 0;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    padding: $spacing-5;
+    box-sizing: border-box;
+    transform: translateY(100%);     // 初始在屏幕下方
+    transition: transform $transition-base cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &.active .calendar-modal-content {
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: $spacing-3;
+  border-bottom: 1px solid $color-border-light;
+  margin-bottom: $spacing-4;
+
+  .cancel, .confirm {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    padding: $spacing-2 $spacing-2;
+    cursor: pointer;
+  }
+  .confirm {
+    color: $color-primary;
+    font-weight: $font-weight-semibold;
+  }
+  .title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+}
+
+.calendar-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-4;
+
+  .nav-arrow {
+    font-size: $font-size-2xl;
+    color: $color-text-primary;
+    padding: $spacing-2 $spacing-3;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .month-year {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+}
+
+.calendar-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.month-block {
+  margin-bottom: $spacing-5;
+
+  .month-title {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    margin-bottom: $spacing-3;
+    color: $color-text-secondary;
+  }
+}
+
+.weekdays {
+  display: flex;
+  margin-bottom: $spacing-3;
+
+  .weekday {
+    flex: 1;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+}
+
+.week-row {
+  display: flex;
+  margin-bottom: $spacing-2;
+}
+
+.day-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-2 0;
+  border-radius: $radius-sm;
+  position: relative;
+  min-height: 90rpx;
+
+  &.empty {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &.other-month {
+    opacity: 0.4;
+  }
+
+  &.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  &.check-in, &.check-out {
+    background-color: $color-primary;
+    color: white;
+    .day-number {
+      color: white;
+      font-weight: $font-weight-semibold;
+    }
+    .day-mark {
+      color: white;
+      background: rgba(255,255,255,0.2);
+    }
+  }
+
+  .day-number {
+    font-size: $font-size-md;
+    margin-bottom: 2px;
+    font-weight: $font-weight-medium;
+  }
+
+  .day-marks {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    .day-mark {
+      font-size: $font-size-xs;
+      color: $color-primary;
+      background: rgba(232, 92, 92, 0.1);
+      padding: 2px 6px;
+      border-radius: $radius-full;
+      white-space: nowrap;
+    }
+  }
+}
+
+.calendar-footer {
+  padding: $spacing-3 0 0;
+  border-top: 1px solid $color-border-light;
+  text-align: center;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin-top: $spacing-3;
+}

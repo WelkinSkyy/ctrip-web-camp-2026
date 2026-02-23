@@ -1,7 +1,7 @@
 {
   "miniprogramRoot": "./dist",
-  "projectname": "esu-customer",
-  "description": "E-su customer end",
+  "projectname": "hotel_user_client",
+  "description": "bbb",
   "appid": "touristappid",
   "setting": {
     "urlCheck": true,

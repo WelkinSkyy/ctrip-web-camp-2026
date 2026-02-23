@@ -1,0 +1,169 @@
+@import "../../app.scss";
+
+.filter-modal-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 2000;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-modal-content {
+  width: 100%;
+  background-color: white;
+  border-radius: 24px 24px 0 0;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 30px 24px;
+  box-sizing: border-box;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid $color-border-light;
+
+  .cancel, .confirm {
+    font-size: 28px;
+    color: $color-text-secondary;
+  }
+  .confirm {
+    color: $color-primary;
+    font-weight: 500;
+  }
+  .title {
+    font-size: 32px;
+    font-weight: 600;
+  }
+}
+
+.selected-tags {
+  padding: 16px 0;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  .no-selected {
+    color: $color-text-tertiary;
+    font-size: 26px;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: $color-primary;
+    color: white;
+    padding: 8px 18px;
+    border-radius: 40px;
+    font-size: 26px;
+    cursor: pointer;
+
+    .close {
+      margin-left: 8px;
+      font-weight: bold;
+    }
+  }
+}
+
+.filter-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 8px;
+}
+
+.filter-section {
+  margin-bottom: 20px;
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid $color-border-light;
+    cursor: pointer;
+
+    .section-title {
+      font-size: 30px;
+      font-weight: 600;
+    }
+    .expand-icon {
+      font-size: 28px;
+      color: $color-text-tertiary;
+    }
+  }
+
+  .section-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 0;
+
+    .option-item {
+      padding: 10px 18px;
+      border: 1px solid $color-border-light;
+      border-radius: 40px;
+      font-size: 26px;
+      color: $color-text-primary;
+      transition: all 0.2s;
+      cursor: pointer;
+
+      &.selected {
+        background-color: $color-primary;
+        color: white;
+        border-color: $color-primary;
+      }
+    }
+  }
+}
+
+.price-slider-container {
+  padding: 20px 0;
+
+  .slider-item {
+    margin-bottom: 20px;
+    
+    .slider-label {
+      font-size: 26px;
+      color: $color-text-secondary;
+      margin-bottom: 10px;
+      display: block;
+    }
+  }
+
+  .price-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 26px;
+    color: $color-text-tertiary;
+    margin-top: 10px;
+  }
+}
+
+.filter-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 0 0;
+  border-top: 1px solid $color-border-light;
+
+  .clear-btn, .confirm-btn {
+    width: 48%;
+    height: 80px;
+    line-height: 80px;
+    text-align: center;
+    border-radius: 50px;
+    font-size: 28px;
+    border: none;
+    outline: none;
+  }
+  .clear-btn {
+    background-color: $color-bg-secondary;
+    color: $color-text-primary;
+  }
+  .confirm-btn {
+    background-color: $color-primary;
+    color: white;
+  }
+}

@@ -1,0 +1,164 @@
+@import "../../app.scss";
+
+.op14 {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 120rpx;
+
+  .filter-header {
+    display: flex;
+    align-items: center;
+    padding: $spacing-2 $spacing-4;
+    background: $color-bg-card;
+
+    .location {
+      display: flex;
+      align-items: center;
+      margin-right: $spacing-3;
+
+      .city {
+        font-size: 40rpx;
+        font-weight: $font-weight-bold;
+        color: #333333;
+        max-width: 140rpx;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .arrow {
+        font-size: 20rpx;
+        color: #999999;
+        margin-left: 4rpx;
+      }
+    }
+
+    .search-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background-color: #f0f0f0;
+      border-radius: $radius-md;
+      padding: 12rpx $spacing-3;
+
+      .search-icon {
+        font-size: 28rpx;
+        color: #999999;
+        margin-right: $spacing-2;
+      }
+      .search-placeholder {
+        font-size: 28rpx;
+        color: #999999;
+        flex: 1;
+      }
+    }
+  }
+
+  .date-guests {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-3 $spacing-4;
+    background: $color-bg-card;
+
+    .date-left {
+      display: flex;
+      align-items: center;
+    }
+    .date {
+      font-size: 30rpx;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .guests {
+      font-size: 28rpx;
+      color: #666666;
+    }
+    .night-badge {
+      font-size: 24rpx;
+      color: white;
+      margin-left: $spacing-2;
+      background: linear-gradient(135deg, #0086f6, #0066cc);
+      padding: 6rpx 16rpx;
+      border-radius: $radius-full;
+      font-weight: 500;
+    }
+  }
+
+  .filter-bar {
+    display: flex;
+    background: $color-bg-card;
+    padding: $spacing-2 $spacing-4;
+    gap: 16rpx;
+
+    .filter-item {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28rpx;
+      color: #333333;
+      padding: 16rpx 0;
+      background: #f5f7fa;
+      border-radius: 12rpx;
+
+      .active {
+        color: $color-primary;
+        font-weight: $font-weight-semibold;
+      }
+      .arrow {
+        font-size: 24rpx;
+        margin-left: 6rpx;
+        color: #999999;
+      }
+    }
+  }
+
+  .quick-tags {
+    padding: $spacing-3 $spacing-4;
+    background: $color-bg-card;
+    white-space: nowrap;
+    display: flex;
+    gap: 12rpx;
+    overflow-x: auto;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 24rpx;
+      color: #666666;
+      background: #f5f7fa;
+      padding: 12rpx 24rpx;
+      border-radius: $radius-full;
+      flex-shrink: 0;
+
+      &:active {
+        background: linear-gradient(135deg, #0086f6, #0066cc);
+        color: white;
+      }
+    }
+  }
+
+  .hotel-scroll {
+    flex: 1;
+    padding: $spacing-2 $spacing-4;
+    background: #f5f5f5;
+  }
+
+  .loading-more {
+    text-align: center;
+    padding: $spacing-4;
+    color: #999999;
+    font-size: 26rpx;
+  }
+  .no-more {
+    text-align: center;
+    padding: $spacing-4;
+    color: #999999;
+    font-size: 26rpx;
+  }
+}

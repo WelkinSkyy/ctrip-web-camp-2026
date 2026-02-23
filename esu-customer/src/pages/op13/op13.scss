@@ -1,0 +1,180 @@
+@import "../../app.scss";
+
+.city-select {
+  position: relative;
+  height: 100vh;
+  background-color: $color-bg-page;
+  display: flex;
+  flex-direction: column;
+
+  .search-header {
+    display: flex;
+    align-items: center;
+    padding: 20px 24px;
+    background-color: white;
+
+    .search-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background-color: $color-bg-secondary;
+      border-radius: 40px;
+      padding: 16px 24px;
+
+      .search-icon {
+        font-size: 32px;
+        color: $color-text-tertiary;
+        margin-right: 12px;
+      }
+
+      .search-input {
+        flex: 1;
+        font-size: 28px;
+        height: 40px;
+      }
+    }
+
+    .cancel-btn {
+      font-size: 28px;
+      color: $color-text-secondary;
+      margin-left: 24px;
+      padding: 16px 0;
+    }
+  }
+
+  /* 定位栏样式（新） */
+  .location-tip {
+    display: flex;
+    align-items: center;
+    background-color: #f0f7ff;
+    padding: 20px 24px;
+    border-bottom: 1px solid $color-border-light;
+
+    .icon {
+      font-size: 32px;
+      color: $color-primary;
+      margin-right: 12px;
+    }
+
+    .text {
+      font-size: 28px;
+      color: $color-text-primary;
+      flex: 1;
+    }
+
+    &:active {
+      background-color: $color-border-light;
+    }
+  }
+
+  .scroll-view {
+    flex: 1;
+    padding: 0 24px;
+  }
+
+  .section {
+    background-color: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 24px;
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+
+      .title {
+        font-size: 30px;
+        font-weight: 600;
+        color: $color-text-primary;
+      }
+
+      .clear {
+        font-size: 32px;
+        color: $color-text-tertiary;
+      }
+    }
+
+    .history-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+
+      .tag {
+        font-size: 26px;
+        color: $color-text-primary;
+        background-color: $color-bg-secondary;
+        padding: 12px 24px;
+        border-radius: 40px;
+      }
+    }
+
+    .hot-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+
+      .hot-item {
+        font-size: 28px;
+        color: $color-text-primary;
+        text-align: center;
+        padding: 12px 0;
+      }
+    }
+  }
+
+  .city-group {
+    background-color: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 16px;
+
+    .group-letter {
+      font-size: 32px;
+      font-weight: 600;
+      color: $color-text-tertiary;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .city-item {
+      display: block;
+      font-size: 28px;
+      color: $color-text-primary;
+      padding: 20px 0;
+      border-bottom: 1px solid $color-bg-secondary;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+  }
+
+  .alphabet-index {
+    position: fixed;
+    right: 10px;
+    top: 30%;
+    transform: translateY(-30%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(255,255,255,0.9);
+    padding: 12px 6px;
+    border-radius: 30px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+
+    .letter {
+      font-size: 22px;
+      color: $color-text-secondary;
+      padding: 6px 0;
+      width: 40px;
+      text-align: center;
+
+      &:active {
+        color: $color-primary;
+        font-weight: 600;
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+@import "../../app.scss";
+
+.op15 {
+  min-height: 100vh;
+  background-color: $color-bg-page;
+  padding-bottom: 120rpx;
+
+  .favorites-scroll {
+    height: calc(100vh - 120rpx);
+    
+    &:has(.empty-state) {
+      display: flex;
+      flex-direction: column;
+    }
+  }
+}

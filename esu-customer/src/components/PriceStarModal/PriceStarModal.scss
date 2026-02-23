@@ -1,0 +1,273 @@
+@import "../../app.scss";
+
+.price-star-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;          // 顶部对齐
+  justify-content: center;
+  z-index: 2000;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transition: opacity $transition-base;
+  pointer-events: none;              // 默认不可点击
+
+  &.active {
+    opacity: 1;
+    pointer-events: auto;            // 激活后可点击
+  }
+
+  .price-star-modal-content {
+    width: 100%;
+    background: white;
+    border-radius: 0 0 $radius-lg $radius-lg;
+    padding: $spacing-5;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(-100%);
+    transition: transform $transition-base cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &.active .price-star-modal-content {
+    transform: translateY(0);
+  }
+}
+
+/* 头部 */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: $spacing-3;
+  border-bottom: 1px solid $color-border-light;
+  margin-bottom: $spacing-4;
+
+  .cancel, .confirm {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    padding: $spacing-2 $spacing-2;
+    cursor: pointer;
+  }
+  .confirm {
+    color: $color-primary;
+    font-weight: $font-weight-semibold;
+  }
+  .title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+}
+
+/* 价格区域 */
+.price-section {
+  margin-bottom: $spacing-6;
+
+  .section-title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    margin-bottom: $spacing-4;
+    display: block;
+  }
+}
+
+.custom-slider-container {
+  padding: $spacing-5 0 $spacing-3;
+  width: 100%;
+}
+
+.slider-track {
+  position: relative;
+  height: 40px;
+  background-color: $color-border-light;
+  border-radius: 20px;
+  margin: 0 10px;
+}
+
+.slider-fill {
+  position: absolute;
+  height: 100%;
+  background-color: $color-primary;
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.slider-handle {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  transform: translateX(-50%);
+  top: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+
+  .handle-dot {
+    width: 36px;
+    height: 36px;
+    background-color: white;
+    border: 3px solid $color-primary;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 134, 246, 0.3);
+  }
+}
+
+.price-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: $spacing-3;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.price-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+  margin-top: $spacing-4;
+
+  .price-tag {
+    font-size: $font-size-sm;
+    padding: $spacing-2 $spacing-4;
+    background-color: $color-bg-secondary;
+    border-radius: $radius-full;
+    color: $color-text-secondary;
+    border: 1px solid $color-border-light;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &.active {
+      background-color: $color-primary;
+      color: white;
+      border-color: $color-primary;
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+}
+
+/* 星级区域 */
+.star-section {
+  margin-bottom: $spacing-6;
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-4;
+
+    .section-title {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-semibold;
+    }
+    .section-link {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      cursor: pointer;
+    }
+  }
+}
+
+.star-options {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+
+  .star-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-4 $spacing-5;
+    border: 1px solid $color-border-light;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &.active {
+      background-color: $color-primary;
+      border-color: $color-primary;
+
+      .label, .sub {
+        color: white;
+      }
+    }
+
+    .label {
+      font-size: $font-size-md;
+      font-weight: $font-weight-medium;
+    }
+    .sub {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+    }
+  }
+}
+
+.footnote {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: $spacing-3;
+  display: block;
+}
+
+/* 底部按钮 */
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: $spacing-5;
+  border-top: 1px solid $color-border-light;
+
+  .clear-btn, .confirm-btn {
+    flex: 1;
+    height: 48px;
+    line-height: 48px;
+    text-align: center;
+    border-radius: $radius-full;
+    font-size: $font-size-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+  }
+  .clear-btn {
+    background-color: $color-bg-secondary;
+    color: $color-text-primary;
+    margin-right: $spacing-2;
+    border: 1px solid $color-border-light;
+  }
+  .confirm-btn {
+    background-color: $color-primary;
+    color: white;
+    margin-left: $spacing-2;
+    box-shadow: 0 4px 10px rgba(232, 92, 92, 0.3);
+  }
+  .clear-btn:active, .confirm-btn:active {
+    transform: translateY(1px);
+  }
+}
+
+/* 小屏适配 */
+@media (max-width: 360px) {
+  .price-star-modal-content {
+    padding: $spacing-4;
+  }
+  .price-tags .price-tag {
+    font-size: $font-size-xs;
+    padding: $spacing-1 $spacing-3;
+  }
+  .star-option {
+    padding: $spacing-3 $spacing-4;
+    .label { font-size: $font-size-sm; }
+    .sub { font-size: $font-size-xs; }
+  }
+  .btn { height: 44px; line-height: 44px; font-size: $font-size-sm; }
+}

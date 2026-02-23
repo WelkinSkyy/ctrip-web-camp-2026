@@ -1,0 +1,111 @@
+@import "../../app.scss";
+
+.search-page {
+  min-height: 100vh;
+  background: #f5f7fa;
+
+  .search-header {
+    display: flex;
+    align-items: center;
+    padding: 24rpx 32rpx;
+    background: white;
+    gap: 20rpx;
+
+    .search-input-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #f5f7fa;
+      border-radius: 40rpx;
+      padding: 0 24rpx;
+      height: 80rpx;
+
+      .search-icon {
+        font-size: 32rpx;
+        margin-right: 16rpx;
+      }
+
+      .search-input {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333;
+      }
+
+      .clear-icon {
+        font-size: 28rpx;
+        color: #999;
+        padding: 8rpx;
+      }
+    }
+
+    .search-btn {
+      font-size: 30rpx;
+      color: #0086f6;
+      font-weight: 500;
+      padding: 16rpx;
+    }
+  }
+
+  .search-content {
+    height: calc(100vh - 130rpx);
+    padding: 24rpx 32rpx;
+
+    .section {
+      margin-bottom: 40rpx;
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24rpx;
+
+        .section-title {
+          font-size: 30rpx;
+          font-weight: 600;
+          color: #1a1a1a;
+        }
+
+        .clear-btn {
+          font-size: 26rpx;
+          color: #999;
+        }
+      }
+
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16rpx;
+
+        .tag-item {
+          display: flex;
+          align-items: center;
+          padding: 16rpx 28rpx;
+          border-radius: 32rpx;
+          font-size: 26rpx;
+
+          &.history {
+            background: white;
+            color: #666;
+            border: 1px solid #e8e8e8;
+
+            .delete-icon {
+              font-size: 22rpx;
+              color: #ccc;
+              margin-left: 12rpx;
+              padding: 4rpx;
+            }
+          }
+
+          &.hot {
+            background: linear-gradient(135deg, #fff7e6, #ffedd5);
+            color: #ff6b00;
+          }
+
+          .tag-text {
+            font-size: 26rpx;
+          }
+        }
+      }
+    }
+  }
+}

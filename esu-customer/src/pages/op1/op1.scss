@@ -1,0 +1,287 @@
+/* ===== 首页样式 ===== */
+@import "../../app.scss";
+
+.index {
+  background-color: $color-bg-page;
+  min-height: 100vh;
+  padding-bottom: 120rpx;
+  position: relative;
+
+  /* ----- 轮播图 ----- */
+  .banner {
+    width: 100%;
+    height: 420rpx;
+
+    .banner-item {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+
+      .banner-img {
+        width: 100%;
+        height: 100%;
+      }
+
+      .banner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        padding: $spacing-4;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: white;
+        background: linear-gradient(0deg, rgba(0,0,0,0.2) 0%, transparent 50%);
+
+        .banner-title {
+          margin-top: 80rpx;
+          .cn {
+            font-size: $font-size-4xl;
+            font-weight: bold;
+            color: #ffd966;
+            text-shadow: 2px 2px 0 #c74f4f;
+            display: block;
+          }
+          .en {
+            font-size: $font-size-lg;
+            font-style: italic;
+            display: block;
+          }
+        }
+
+        .banner-tag {
+          align-self: flex-end;
+          background-color: #ffd966;
+          color: #a62c00;
+          padding: $spacing-1 $spacing-3;
+          border-radius: $radius-full;
+          font-weight: bold;
+          font-size: $font-size-sm;
+        }
+
+        .banner-qualification {
+          align-self: flex-start;
+          background: rgba(0,0,0,0.5);
+          backdrop-filter: blur(4px);
+          padding: $spacing-1 $spacing-3;
+          border-radius: $radius-sm;
+          font-size: $font-size-xs;
+        }
+      }
+    }
+  }
+
+  /* ----- 预订卡片 ----- */
+  .booking-card {
+    background-color: $color-bg-card;
+    margin: $spacing-3 $spacing-4;
+    padding: $spacing-4;
+    border-radius: $radius-xl;
+    box-shadow: $shadow-card;
+
+    .booking-tabs {
+      display: flex;
+      margin-bottom: $spacing-4;
+      .tab-item {
+        flex: 1;
+        text-align: center;
+        padding-bottom: $spacing-2;
+        font-size: $font-size-md;
+        font-weight: $font-weight-medium;
+        color: $color-text-secondary;
+        position: relative;
+        &.active {
+          font-weight: $font-weight-bold;
+          color: $color-primary;
+          &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 25%;
+            width: 50%;
+            height: 4rpx;
+            background-color: $color-primary;
+            border-radius: $radius-full;
+          }
+        }
+      }
+    }
+
+    .location-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: $spacing-3;
+      .city-selector {
+        display: flex;
+        align-items: center;
+        margin-right: $spacing-3;
+        .city-name {
+          font-size: 44rpx;
+          font-weight: $font-weight-bold;
+          color: #333333;
+          margin-right: $spacing-1;
+        }
+        .arrow {
+          font-size: $font-size-xs;
+          color: #999999;
+        }
+      }
+      .search-box {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background-color: $color-bg-secondary;
+        border-radius: $radius-md;
+        padding: $spacing-2 $spacing-3;
+        .placeholder-text {
+          font-size: 32rpx;
+          color: #999999;
+          flex: 1;
+        }
+        .location-icon {
+          width: 32rpx;
+          height: 32rpx;
+          margin-left: $spacing-2;
+          position: relative;
+          &::before {
+            content: '';
+            position: absolute;
+            width: 20rpx;
+            height: 20rpx;
+            background-color: $color-primary;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            top: 2rpx;
+            left: 6rpx;
+          }
+          &::after {
+            content: '';
+            position: absolute;
+            width: 8rpx;
+            height: 8rpx;
+            background-color: white;
+            border-radius: 50%;
+            top: 8rpx;
+            left: 12rpx;
+          }
+        }
+      }
+    }
+
+    .date-row {
+      display: flex;
+      align-items: flex-end;
+      padding: $spacing-3 0;
+      border-top: 1px solid $color-border-light;
+      border-bottom: 1px solid $color-border-light;
+      margin-bottom: $spacing-3;
+      .date-item {
+        display: flex;
+        align-items: baseline;
+        .date-num {
+          font-size: 40rpx;
+          font-weight: $font-weight-bold;
+          color: #333333;
+        }
+        .date-label {
+          font-size: 26rpx;
+          font-weight: $font-weight-normal;
+          color: #666666;
+          margin-left: 8rpx;
+        }
+      }
+      .date-separator {
+        margin: 0 $spacing-3;
+        font-size: 32rpx;
+        color: #cccccc;
+        margin-bottom: 4rpx;
+      }
+      .night-count {
+        margin-left: auto;
+        font-size: 26rpx;
+        color: #666666;
+        margin-bottom: 4rpx;
+      }
+    }
+
+    .guest-row {
+      display: flex;
+      align-items: center;
+      padding: $spacing-2 0;
+      margin-bottom: $spacing-3;
+      .guest-selector, .price-star {
+        display: flex;
+        align-items: center;
+        .guest-text, .price-star-text {
+          font-size: 32rpx;
+          margin-right: $spacing-1;
+        }
+        .arrow {
+          font-size: $font-size-xs;
+          color: #999999;
+        }
+      }
+      .guest-selector {
+        flex: 3;
+        .guest-text {
+          font-weight: $font-weight-bold;
+          color: #333333;
+        }
+      }
+      .guest-divider {
+        width: 1px;
+        height: 40rpx;
+        background-color: #e0e0e0;
+        margin: 0 $spacing-2;
+      }
+      .price-star {
+        flex: 2;
+        justify-content: flex-end;
+        .price-star-text {
+          color: #999999;
+          font-weight: $font-weight-normal;
+        }
+      }
+    }
+
+    .query-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #0086f6 0%, #4daaf8 50%, #0086f6 100%);
+      color: white;
+      font-size: $font-size-lg;
+      font-weight: $font-weight-bold;
+      border-radius: 16rpx 16rpx 48rpx 16rpx;
+      padding: $spacing-4 0;
+      border: none;
+      box-shadow: 0 8px 24px rgba(0, 134, 246, 0.35);
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+
+      &::before {
+        content: '';
+        position: absolute;
+        right: -10rpx;
+        bottom: -10rpx;
+        width: 60rpx;
+        height: 60rpx;
+        background: radial-gradient(circle at center, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+        border-radius: 50%;
+      }
+
+      &:active {
+        transform: translateY(2px);
+        box-shadow: 0 4px 12px rgba(0, 134, 246, 0.25);
+      }
+    }
+  }
+
+  /* ----- 底部导航留白 ----- */
+  .bottom-nav-placeholder {
+    height: 120rpx;
+  }
+}

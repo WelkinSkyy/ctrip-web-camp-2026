@@ -1,0 +1,131 @@
+@import "../../app.scss";
+
+.guest-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;            // 底部对齐
+  justify-content: center;
+  z-index: 2000;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transition: opacity $transition-base;
+  pointer-events: none;              // 默认不可点击
+
+  &.active {
+    opacity: 1;
+    pointer-events: auto;            // 激活后可点击
+  }
+
+  .guest-modal-content {
+    width: 100%;
+    background-color: white;
+    border-radius: $radius-lg $radius-lg 0 0;
+    padding: $spacing-6 $spacing-5;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(100%);     // 初始在屏幕下方
+    transition: transform $transition-base cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &.active .guest-modal-content {
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: $spacing-3;
+  border-bottom: 1px solid $color-border-light;
+  margin-bottom: $spacing-4;
+
+  .cancel, .confirm {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    padding: $spacing-2 $spacing-2;
+    cursor: pointer;
+  }
+  .confirm {
+    color: $color-primary;
+    font-weight: $font-weight-semibold;
+  }
+  .title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+}
+
+.guest-body {
+  .guest-tip {
+    font-size: $font-size-sm;
+    color: $color-primary;
+    background: rgba(232, 92, 92, 0.1);
+    padding: $spacing-3;
+    border-radius: $radius-md;
+    margin-bottom: $spacing-4;
+  }
+
+  .guest-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-4;
+
+    .guest-label {
+      font-size: $font-size-md;
+      color: $color-text-primary;
+    }
+    .guest-label-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .guest-sub {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+      margin-top: $spacing-1;
+    }
+
+    .stepper {
+      display: flex;
+      align-items: center;
+      background-color: $color-bg-secondary;
+      border-radius: $radius-full;
+      padding: $spacing-1;
+
+      .stepper-btn {
+        width: 72rpx;
+        height: 72rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        border-radius: 50%;
+        font-size: $font-size-xl;
+        color: $color-text-primary;
+        box-shadow: $shadow-sm;
+        cursor: pointer;
+        transition: all $transition-fast;
+
+        &:active {
+          transform: scale(0.9);
+          background: $color-bg-secondary;
+        }
+      }
+
+      .stepper-value {
+        min-width: 80rpx;
+        text-align: center;
+        font-size: $font-size-lg;
+        font-weight: $font-weight-medium;
+        color: $color-text-primary;
+      }
+    }
+  }
+}
