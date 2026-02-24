@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-const BASE_URL = 'http://8.145.34.161:3000'
+const BASE_URL = process.env.TARO_APP_BASE_URL
 
 const getAuthToken = () => {
   try {

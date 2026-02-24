@@ -12,6 +12,7 @@
     "build": "rolldown -c",
     "check": "tsc --noEmit",
     "dev": "tsx main.ts",
+    "deploy": "pnpm run build && sudo docker build -t esu-service .",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "fmt": "oxfmt"
   },

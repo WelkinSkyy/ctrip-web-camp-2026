@@ -1,0 +1,6 @@
+localhost:3002 {
+	root /srv
+	encode
+	try_files {path} /index.html
+	file_server
+}

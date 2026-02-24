@@ -12,6 +12,7 @@
   "scripts": {
     "prepare": "husky",
     "new": "taro new",
+    "deploy:h5": "npm run build:h5 && sudo docker build -t esu-customer .",
     "build:weapp": "taro build --type weapp",
     "build:swan": "taro build --type swan",
     "build:alipay": "taro build --type alipay",
