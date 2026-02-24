@@ -1,12 +1,3 @@
-/**
- * 酒店管理系统 API 集成测试
- *
- * 测试策略：
- * - 使用 ts-rest 客户端适配器进行类型安全的 API 测试
- * - 注入测试数据库
- * - 测试完整的 API 流程
- */
-
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';

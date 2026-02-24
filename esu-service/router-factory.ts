@@ -1,10 +1,3 @@
-/**
- * 路由处理器工厂
- *
- * 接受数据库实例作为参数，返回路由处理器
- * 这种依赖注入模式便于测试和生产环境使用不同的数据库
- */
-
 import { initServer } from '@ts-rest/fastify';
 import { SQL, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
