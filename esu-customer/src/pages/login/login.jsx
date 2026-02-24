@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { View, Input, Button, Text } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useRouter } from '@tarojs/taro'
 import { login, register } from '../../un/api'
 import './login.scss'
 
 export default function Login() {
+  const router = useRouter()
+  const { redirect } = router.params
+  
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -33,7 +36,11 @@ export default function Login() {
         Taro.setStorageSync('userInfo', res.user)
         Taro.showToast({ title: '登录成功', icon: 'success' })
         setTimeout(() => {
-          Taro.switchTab({ url: '/pages/op1/op1' })
+          if (redirect) {
+            Taro.reLaunch({ url: decodeURIComponent(redirect) })
+          } else {
+            Taro.switchTab({ url: '/pages/op1/op1' })
+          }
         }, 1500)
       } else {
         await register(username, password)
@@ -55,6 +62,10 @@ export default function Login() {
 
   return (
     <View className='login-container'>
+      <View className='back-btn' onClick={() => Taro.navigateBack()}>
+        <View className='back-icon'>←</View>
+      </View>
+      
       <View className='login-header'>
         <Text className='login-title'>易宿酒店预订</Text>
         <Text className='login-subtitle'>{isLogin ? '欢迎回来' : '创建新账户'}</Text>

@@ -66,22 +66,32 @@ export default function Op14() {
   const loadHotels = async (pageNum = 1) => {
     if (loading || !hasMore) return
     setLoading(true)
-    const params = {
-      ...filters,
-      city: filters.city ? decodeURIComponent(filters.city) : undefined,
-      page: pageNum,
-      pageSize: 10,
-      sort: sortType,
+    try {
+      const params = {
+        ...filters,
+        city: filters.city ? decodeURIComponent(filters.city) : undefined,
+        page: pageNum,
+        pageSize: 10,
+        sort: sortType,
+      }
+      console.log('请求参数:', params)
+      const result = await fetchHotelList(params)
+      
+      const newHotels = Array.isArray(result?.hotels) ? result.hotels : []
+      const total = result?.total ?? 0
+      
+      setHasMore(pageNum * 10 < total)
+      if (pageNum === 1) {
+        setHotels(newHotels)
+      } else {
+        setHotels(prev => [...prev, ...newHotels])
+      }
+    } catch (error) {
+      console.error('加载酒店列表失败:', error)
+      Taro.showToast({ title: '加载失败', icon: 'none' })
+    } finally {
+      setLoading(false)
     }
-    console.log('请求参数:', params)
-    const data = await fetchHotelList(params)
-    if (data.length < 10) setHasMore(false)
-    if (pageNum === 1) {
-      setHotels(data)
-    } else {
-      setHotels(prev => [...prev, ...data])
-    }
-    setLoading(false)
   }
 
   useEffect(() => {

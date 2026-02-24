@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-const BASE_URL = process.env.TARO_APP_BASE_URL
+const BASE_URL = 'http://8.145.34.161:3000'
 
 const getAuthToken = () => {
   try {
@@ -163,7 +163,7 @@ export const fetchHotelList = async (params = {}) => {
         score: hotel.averageRating,
         reviewCount: hotel.ratingCount,
         tags: hotel.tags || [],
-        promotions: hotel.promotions || [],
+        promotions: (hotel.promotions || []).map(p => p.description || p.type || '优惠'),
         img: hotel.images?.[0] || 'https://picsum.photos/200/120',
       }
     })
@@ -191,7 +191,7 @@ export const fetchHotelDetail = async (id) => {
       images: hotel.images || [],
       facilities: hotel.facilities || [],
       nearbyAttractions: hotel.nearbyAttractions || [],
-      promotions: hotel.promotions || [],
+      promotions: (hotel.promotions || []).map(p => p.description || p.type || '优惠'),
       rooms: hotel.roomTypes?.map(rt => ({
         id: rt.id,
         name: rt.name,

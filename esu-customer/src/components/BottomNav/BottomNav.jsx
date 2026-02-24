@@ -1,5 +1,6 @@
 import { View, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
+import { requireLogin } from '../../utils/auth'
 import './BottomNav.scss'
 
 const HomeIcon = ({ active }) => (
@@ -53,6 +54,8 @@ const tabList = [
   { pagePath: '/pages/op16/op16', text: '订单', Icon: OrderIcon },
 ]
 
+const needLoginPages = ['/pages/op15/op15', '/pages/op16/op16']
+
 export default function BottomNav({ currentPath }) {
   const switchTab = (path) => {
     console.log('点击跳转:', path)
@@ -60,6 +63,13 @@ export default function BottomNav({ currentPath }) {
       console.log('当前页面，不跳转')
       return
     }
+    
+    if (needLoginPages.includes(path)) {
+      if (!requireLogin(path)) {
+        return
+      }
+    }
+    
     Taro.reLaunch({ url: path })
   }
 

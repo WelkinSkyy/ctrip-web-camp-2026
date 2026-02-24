@@ -3,6 +3,7 @@ import Taro, { useRouter } from '@tarojs/taro'
 import { useState, useEffect } from 'react'
 import { fetchHotelDetail, isFavorite, addFavorite, removeFavorite } from '../../un/api'
 import { FACILITY_ICONS } from '../../mock/facilities'
+import { requireLogin, isLoggedIn } from '../../utils/auth'
 import RoomCard from '../../components/RoomCard/RoomCard'
 import CalendarModal from '../op1/CalendarModal/CalendarModal'
 import GuestModal from '../../components/GuestModal/GuestModal'
@@ -61,6 +62,11 @@ export default function Op11() {
 
   // 收藏/取消收藏处理
   const handleFavorite = () => {
+    const currentUrl = `/pages/op11/op11?id=${id}`
+    if (!requireLogin(currentUrl)) {
+      return
+    }
+    
     if (isFav) {
       removeFavorite(hotel.id)
       setIsFav(false)
@@ -138,6 +144,10 @@ export default function Op11() {
   }
 
   const handleRoomClick = (room) => {
+    const currentUrl = `/pages/op11/op11?id=${id}`
+    if (!requireLogin(currentUrl)) {
+      return
+    }
     setSelectedRoom(room)
     setShowBookingModal(true)
   }
