@@ -57,8 +57,8 @@ export default function HotelEdit({ id }: { id?: string }) {
   const [roomTypeEditId, setRoomTypeEditId] = useState<number | null>(null);
   const [roomTypeForm, setRoomTypeForm] = useState({ name: '', price: '', stock: '', capacity: '', description: '' });
 
-  const loadHotel = () => {
-    if (!id || !isEdit) return;
+  const loadHotel = (): Promise<void> => {
+    if (!id || !isEdit) return Promise.resolve();
     return getHotel(id).then((h) => {
       setForm(backendToForm(h));
       setRoomTypes((h.roomTypes ?? []).map((r) => ({ id: r.id, name: r.name, price: r.price, stock: r.stock, capacity: r.capacity ?? null, description: r.description ?? null })));

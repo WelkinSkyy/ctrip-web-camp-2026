@@ -1,4 +1,4 @@
-import { request, setToken } from './request';
+import { request } from './request';
 
 export type BackendRole = 'customer' | 'merchant' | 'admin';
 

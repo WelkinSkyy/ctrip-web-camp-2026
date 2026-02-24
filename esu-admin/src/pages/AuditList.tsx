@@ -306,7 +306,7 @@ export default function AuditList() {
                       <button type="button" className="audit-modal-btn audit-modal-btn-reject" onClick={() => handleReject(modalId, rejectReason.trim())}>驳回</button>
                     </>
                   )}
-                  {(modalDetail.status === 'approved' || modalDetail.status === 'rejected') && (
+                  {(modalDetail.status === 'approved' || modalDetail.status === 'rejected' || modalDetail.status === 'offline') && (
                     <button
                       type="button"
                       className="audit-modal-btn audit-modal-btn-toggle"

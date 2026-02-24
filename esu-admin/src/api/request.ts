@@ -44,9 +44,11 @@ async function parseError(res: Response): Promise<string> {
   }
 }
 
+export type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown };
+
 export async function request<T>(
   path: string,
-  options: RequestInit & { method?: string; body?: unknown } = {}
+  options: RequestOptions = {}
 ): Promise<T> {
   const { body, ...init } = options;
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
