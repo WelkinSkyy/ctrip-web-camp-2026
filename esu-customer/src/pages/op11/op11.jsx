@@ -10,16 +10,74 @@ import GuestModal from '../../components/GuestModal/GuestModal'
 import BookingModal from '../../components/BookingModal/BookingModal'
 import './op11.scss'
 
+const isH5 = process.env.TARO_ENV === 'h5'
+
+const backIconBase64 = 'data:image/svg+xml,%3Csvg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M19 12H5M12 19l-7-7 7-7" stroke="%23333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E'
+const heartFilledBase64 = 'data:image/svg+xml,%3Csvg width="22" height="22" viewBox="0 0 24 24" fill="%23ff4757" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/%3E%3C/svg%3E'
+const heartOutlineBase64 = 'data:image/svg+xml,%3Csvg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="%23333" stroke-width="2"/%3E%3C/svg%3E'
+const shareIconBase64 = 'data:image/svg+xml,%3Csvg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E'
+
+const BackIcon = () => {
+  if (isH5) {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 12H5M12 19l-7-7 7-7" stroke="#333" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  return <Image src={backIconBase64} style={{ width: '48rpx', height: '48rpx' }} mode='aspectFit' />
+}
+
+const HeartIcon = ({ filled }) => {
+  if (isH5) {
+    if (filled) {
+      return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#ff4757" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      )
+    }
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="#333" strokeWidth="2"/>
+      </svg>
+    )
+  }
+  return <Image src={filled ? heartFilledBase64 : heartOutlineBase64} style={{ width: '44rpx', height: '44rpx' }} mode='aspectFit' />
+}
+
+const ShareIcon = () => {
+  if (isH5) {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  return <Image src={shareIconBase64} style={{ width: '44rpx', height: '44rpx' }} mode='aspectFit' />
+}
+
+const FacilityIcon = ({ facility }) => {
+  if (isH5) {
+    return <View dangerouslySetInnerHTML={{ __html: facility.svgString }} style={{ width: '36rpx', height: '36rpx', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+  }
+  return (
+    <Image 
+      src={facility.icon} 
+      style={{ width: '36rpx', height: '36rpx' }}
+      mode='aspectFit'
+    />
+  )
+}
+
 export default function Op11() {
   const router = useRouter()
   const { id, checkIn: initialCheckIn, checkOut: initialCheckOut, rooms: initialRooms, adults: initialAdults, childs: initialChilds } = router.params
 
-  // 酒店数据
   const [hotel, setHotel] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isFav, setIsFav] = useState(false)
 
-  // 日期状态 - 从路由参数获取初始值，否则使用默认值
   const getDefaultDate = (offset) => {
     const d = new Date()
     d.setDate(d.getDate() + offset)
@@ -29,18 +87,15 @@ export default function Op11() {
   const [checkIn, setCheckIn] = useState(initialCheckIn || getDefaultDate(0))
   const [checkOut, setCheckOut] = useState(initialCheckOut || getDefaultDate(1))
 
-  // 人数状态 - 从路由参数获取初始值，否则使用默认值
   const [roomCount, setRoomCount] = useState(Number(initialRooms) || 1)
   const [adultCount, setAdultCount] = useState(Number(initialAdults) || 1)
   const [childCount, setChildCount] = useState(Number(initialChilds) || 0)
 
-  // 弹窗显示状态
   const [showDateModal, setShowDateModal] = useState(false)
   const [showGuestModal, setShowGuestModal] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState(null)
 
-  // 计算入住天数
   const nights = Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24))
 
   useEffect(() => {
@@ -53,14 +108,12 @@ export default function Op11() {
     loadDetail()
   }, [id])
 
-  // 当 hotel 加载完成后，检查是否已收藏
   useEffect(() => {
     if (hotel) {
       setIsFav(isFavorite(hotel.id))
     }
   }, [hotel])
 
-  // 收藏/取消收藏处理
   const handleFavorite = () => {
     const currentUrl = `/pages/op11/op11?id=${id}`
     if (!requireLogin(currentUrl)) {
@@ -78,7 +131,6 @@ export default function Op11() {
     }
   }
 
-  // 日期格式化显示
   const formatDate = (dateStr) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
@@ -87,7 +139,6 @@ export default function Op11() {
     return `${month}月${day}日`
   }
 
-  // 日期格式化（带星期）
   const formatDateWithWeekday = (dateStr) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
@@ -98,19 +149,16 @@ export default function Op11() {
     return `${month}月${day}日 ${weekday}`
   }
 
-  // 人数显示格式化
   const formatGuests = () => {
     return `${roomCount}间 ${adultCount}成人 ${childCount}儿童`
   }
 
-  // 日期确认回调
   const handleDateConfirm = (newCheckIn, newCheckOut) => {
     setCheckIn(newCheckIn)
     setCheckOut(newCheckOut)
     setShowDateModal(false)
   }
 
-  // 人数确认回调
   const handleGuestConfirm = (params) => {
     setRoomCount(params.rooms)
     setAdultCount(params.adults)
@@ -118,7 +166,6 @@ export default function Op11() {
     setShowGuestModal(false)
   }
 
-  // 打开地图
   const handleOpenMap = () => {
     if (!hotel?.location) {
       Taro.showToast({ title: '暂无位置信息', icon: 'none' })
@@ -175,7 +222,6 @@ export default function Op11() {
   return (
     <View className='op11'>
       <ScrollView scrollY className='content'>
-        {/* 大图轮播 */}
         <Swiper
           className='banner'
           indicatorDots={bannerImages.length > 1}
@@ -193,44 +239,27 @@ export default function Op11() {
           ))}
         </Swiper>
 
-        {/* 顶部导航头 - 浮动在轮播图上 */}
         <View className='nav-header'>
           <View className='nav-back' onClick={() => Taro.navigateBack()}>
-            <View 
-              className='back-icon-svg'
-              dangerouslySetInnerHTML={{ 
-                __html: `<svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`
-              }}
-            />
+            <BackIcon />
+          </View>
+          <View className='nav-title'>
+            <Text className='hotel-title-text'>{hotel.name}</Text>
           </View>
           <View className='header-actions'>
             <View
               className={`action-btn ${isFav ? 'favorited' : ''}`}
               onClick={handleFavorite}
             >
-              <View 
-                className='icon-svg'
-                dangerouslySetInnerHTML={{ 
-                  __html: isFav 
-                    ? `<svg viewBox="0 0 24 24" fill="#ff4757"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-                    : `<svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-                }}
-              />
+              <HeartIcon filled={isFav} />
             </View>
             <View className='action-btn' onClick={() => Taro.showToast({ title: '分享功能开发中', icon: 'none' })}>
-              <View 
-                className='icon-svg'
-                dangerouslySetInnerHTML={{ 
-                  __html: `<svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>`
-                }}
-              />
+              <ShareIcon />
             </View>
           </View>
         </View>
 
-        {/* 酒店信息 */}
         <View className='hotel-info'>
-          {/* 酒店名称和星级 */}
           <View className='hotel-header'>
             <Text className='hotel-name'>{hotel.name}</Text>
             <View className='hotel-stars'>
@@ -240,7 +269,6 @@ export default function Op11() {
             </View>
           </View>
           
-          {/* 评分 */}
           <View className='hotel-rating-row'>
             <View className='rating-badge'>
               <Text className='score'>{hotel.score}</Text>
@@ -248,15 +276,11 @@ export default function Op11() {
             </View>
           </View>
           
-          {/* 设施政策标签 - 横向滚动 */}
           <View className='facility-tags-wrapper'>
             <ScrollView scrollX className='facility-tags' showScrollbar={false}>
               {hotelFacilities.map((facility, index) => (
                 <View key={index} className='facility-tag'>
-                  <View 
-                    className='tag-icon' 
-                    dangerouslySetInnerHTML={{ __html: facility.icon }}
-                  />
+                  <FacilityIcon facility={facility} />
                   <Text className='tag-label'>{facility.name}</Text>
                 </View>
               ))}
@@ -277,7 +301,6 @@ export default function Op11() {
           </View>
         </View>
 
-        {/* 日历+人数信息栏 */}
         <View className='date-guest-bar'>
           <View className='date-section' onClick={() => setShowDateModal(true)}>
             <View className='date-item'>
@@ -297,7 +320,6 @@ export default function Op11() {
           </View>
         </View>
 
-        {/* 房间类型标签 */}
         <View className='room-type-tags'>
           <Text className='room-tag active'>含早餐</Text>
           <Text className='room-tag'>立即确认</Text>
@@ -306,7 +328,6 @@ export default function Op11() {
           <Text className='room-tag'>免费取消</Text>
         </View>
 
-        {/* 房型列表 */}
         <View className='room-section'>
           {sortedRooms.length > 0 ? (
             sortedRooms.map(room => (
@@ -317,10 +338,8 @@ export default function Op11() {
           )}
         </View>
 
-
       </ScrollView>
 
-      {/* 日历弹窗 */}
       <CalendarModal
         visible={showDateModal}
         onClose={() => setShowDateModal(false)}
@@ -329,7 +348,6 @@ export default function Op11() {
         checkOut={checkOut}
       />
 
-      {/* 人数弹窗 */}
       <GuestModal
         visible={showGuestModal}
         onClose={() => setShowGuestModal(false)}
@@ -339,7 +357,6 @@ export default function Op11() {
         initialChilds={childCount}
       />
 
-      {/* 预订弹窗 */}
       <BookingModal
         visible={showBookingModal}
         onClose={() => setShowBookingModal(false)}

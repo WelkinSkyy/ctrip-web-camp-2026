@@ -1,4 +1,4 @@
-import { View, Swiper, SwiperItem, Image, Text, Button } from '@tarojs/components'
+import { View, Swiper, SwiperItem, Image, Text, Button, ScrollView } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import './op1.scss'
@@ -13,6 +13,17 @@ const tabs = [
   { key: 'overseas', name: '海外' },
   { key: 'hourly', name: '钟点房' },
   { key: 'homestay', name: '民宿' },
+]
+
+const homeQuickTags = [
+  { label: '4.7分以上', value: '4.7分以上' },
+  { label: '上海外滩', value: '上海外滩' },
+  { label: '南京路', value: '南京路' },
+  { label: '北京西路', value: '北京西路' },
+  { label: '亲子酒店', value: '亲子酒店' },
+  { label: '豪华型', value: '豪华型' },
+  { label: '免费停车', value: '免费停车' },
+  { label: '含早餐', value: '含早餐' },
 ]
 
 export default function Index() {
@@ -238,6 +249,19 @@ const handleTagClick = (tagName) => {
             <Text className='arrow'>▼</Text>
           </View>
         </View>
+
+        {/* 快捷标签 */}
+        <ScrollView scrollX className='home-quick-tags' showScrollbar={false} enhanced bounces>
+          {homeQuickTags.map(tag => (
+            <View 
+              key={tag.label} 
+              className='quick-tag-item'
+              onClick={() => handleTagClick(tag.value)}
+            >
+              <Text className='tag-text'>{tag.label}</Text>
+            </View>
+          ))}
+        </ScrollView>
 
         {/* 查询按钮 */}
         <Button className='query-btn' onClick={handleQuery}>查询</Button>

@@ -1,7 +1,28 @@
 import { View, Text, Image } from '@tarojs/components'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import './HotelCard.scss'
 
 const HotelCard = ({ hotel, onClick }) => {
+  const cardRef = useRef(null)
+  const [cardHeight, setCardHeight] = useState(0)
+  const hasMeasured = useRef(false)
+
+  const measureHeight = useCallback(() => {
+    if (hasMeasured.current) return
+    if (cardRef.current) {
+      const height = cardRef.current.offsetHeight
+      if (height > 0) {
+        setCardHeight(height)
+        hasMeasured.current = true
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    measureHeight()
+    setTimeout(measureHeight, 100)
+  }, [measureHeight])
+
   const handleClick = () => {
     if (onClick) onClick(hotel)
   }
@@ -17,8 +38,8 @@ const HotelCard = ({ hotel, onClick }) => {
   }
 
   return (
-    <View className='hotel-card' onClick={handleClick}>
-      <View className='hotel-image'>
+    <View className='hotel-card' ref={cardRef} onClick={handleClick}>
+      <View className='hotel-image' style={{ height: cardHeight > 0 ? cardHeight + 'px' : '180px' }}>
         <Image src={hotel.img} mode='aspectFill' lazyLoad className='hotel-img' />
       </View>
       <View className='hotel-info'>

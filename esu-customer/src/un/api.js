@@ -1,6 +1,8 @@
 import Taro from '@tarojs/taro'
 
-const BASE_URL = 'http://8.145.34.161:3000'
+const BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://trip.w-sky.cc:8433'
+  : 'http://8.145.34.161:3002'
 
 const getAuthToken = () => {
   try {
@@ -104,6 +106,9 @@ export const fetchHotelList = async (params = {}) => {
     
     if (keyword || city) {
       queryParams.append('keyword', keyword || city || '')
+    }
+    if (tag) {
+      queryParams.append('keyword', tag)
     }
     if (checkIn) {
       queryParams.append('checkIn', checkIn)

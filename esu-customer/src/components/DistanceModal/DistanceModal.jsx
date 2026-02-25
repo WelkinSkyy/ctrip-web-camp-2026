@@ -13,7 +13,8 @@ export default function DistanceModal({
   visible = false,
   onClose = () => {},
   onConfirm = () => {},
-  currentDistance = null
+  currentDistance = null,
+  top = 0
 }) {
   const [selected, setSelected] = useState(currentDistance ?? null)
 

@@ -33,9 +33,12 @@ export default function Op14() {
 
   useEffect(() => {
     const { city, checkIn, checkOut, rooms, adults, childs, price, star, keyword, tag } = router.params
+    const decodedTag = tag ? decodeURIComponent(tag) : undefined
     setFilters({ 
       city: city ? decodeURIComponent(city) : undefined,
-      checkIn, checkOut, rooms, adults, childs, price, star, keyword, tag 
+      checkIn, checkOut, rooms, adults, childs, price, star, 
+      keyword: keyword ? decodeURIComponent(keyword) : undefined,
+      tag: decodedTag
     })
     setPage(1)
     setHotels([])
@@ -79,6 +82,9 @@ export default function Op14() {
       
       const newHotels = Array.isArray(result?.hotels) ? result.hotels : []
       const total = result?.total ?? 0
+      
+      console.log('API返回:', { total, newHotelsLength: newHotels.length, page: pageNum })
+      console.log('hasMore计算:', pageNum * 10, '<', total, '=', pageNum * 10 < total)
       
       setHasMore(pageNum * 10 < total)
       if (pageNum === 1) {
@@ -214,7 +220,7 @@ export default function Op14() {
         </View>
         <View className='search-box' onClick={goToSearch}>
           <Text className='search-icon'>🔍</Text>
-          <Text className='search-placeholder'>位置/品牌/酒店</Text>
+          <Text className='search-placeholder'>{filters.keyword || filters.tag || '位置/品牌/酒店'}</Text>
         </View>
       </View>
 

@@ -212,7 +212,7 @@
       display: flex;
       align-items: center;
       padding: $spacing-2 0;
-      margin-bottom: $spacing-3;
+      margin-bottom: $spacing-1;
       .guest-selector, .price-star {
         display: flex;
         align-items: center;
@@ -276,6 +276,44 @@
       &:active {
         transform: translateY(2px);
         box-shadow: 0 4px 12px rgba(0, 134, 246, 0.25);
+      }
+    }
+
+    .home-quick-tags {
+      white-space: nowrap;
+      padding: $spacing-2 0;
+      margin: 0 -#{$spacing-4};
+      padding-left: $spacing-4;
+      padding-right: $spacing-4;
+      -webkit-overflow-scrolling: touch;
+      
+      &::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+      
+      .quick-tag-item {
+        display: inline-block;
+        padding: 8rpx 20rpx;
+        margin-right: $spacing-2;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: $radius-full;
+        font-size: 24rpx;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        transition: all 0.2s ease;
+        
+        &:active {
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+          color: $color-primary;
+          border-color: $color-primary;
+          transform: scale(0.96);
+        }
+        
+        .tag-text {
+          font-size: 24rpx;
+        }
       }
     }
   }
