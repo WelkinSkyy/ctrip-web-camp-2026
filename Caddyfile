@@ -1,0 +1,16 @@
+{
+	debug
+}
+
+trip.w-sky.cc:8443 {
+	tls /ca/fullchain.pem /ca/key.pem
+	root /srv
+	encode
+	try_files {path} /index.html
+	file_server
+}
+
+trip.w-sky.cc:3000 {
+	tls /ca/fullchain.pem /ca/key.pem
+	reverse_proxy :3002
+}
