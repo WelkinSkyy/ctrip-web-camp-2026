@@ -12,7 +12,6 @@ import {
   buildFilterConditions,
   applyRoomTypesDiscount,
   sortHotelsByDistance,
-  sortHotelsByMultipleKeys,
   buildRulesFilter,
   getHotelMinPrice,
   DEFAULT_SEARCH_RADIUS,
@@ -114,6 +113,7 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
       const rulesFilter = buildRulesFilter(rules, hasGeoSearch, userLat, userLng);
 
       const sortBy = typeof query.sortBy === 'string' ? query.sortBy : undefined;
+      const reversed = query.reversed ?? false;
 
       const hasEffectiveGeoSearch = hasGeoSearch || (userLat !== undefined && userLng !== undefined);
       const distanceSql = hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined
@@ -147,10 +147,11 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
           .where(sql`${sql.join(whereClauses, sql` AND `)}`);
 
         if (sortBy === 'distance') {
+          const direction = reversed ? -1 : 1;
           hotelIdsWithDistance.sort((a, b) => {
             const aDist = a.distance ?? Infinity;
             const bDist = b.distance ?? Infinity;
-            return aDist - bDist;
+            return (aDist - bDist) * direction;
           });
         }
       } else {
@@ -163,7 +164,8 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
           } else if (sortBy === 'createdAt') {
             columnName = 'created_at';
           }
-          orderByClauses.push(sql`${sql.raw(columnName)} desc`);
+          const direction = reversed ? 'asc' : 'desc';
+          orderByClauses.push(sql`${sql.raw(columnName)} ${sql.raw(direction)}`);
         }
 
         orderByClauses.push(sql`${hotels.id} desc`);
@@ -214,10 +216,11 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
         .filter((h): h is HotelWithRelations => h !== undefined);
 
       if (sortBy === 'price') {
+        const direction = reversed ? -1 : 1;
         sortedResult.sort((a, b) => {
           const priceA = getHotelMinPrice(a);
           const priceB = getHotelMinPrice(b);
-          return priceA - priceB;
+          return (priceA - priceB) * direction;
         });
       }
 
@@ -441,6 +444,7 @@ async function handleGeoSearch(
   filterConditions: SQL | undefined,
   rulesFilter: SQL | undefined,
   sortBy: string | undefined,
+  reversed: boolean,
   offset: number,
   limit: number,
   page: number,
@@ -474,7 +478,12 @@ async function handleGeoSearch(
 
   let sortedHotels: Array<{ id: number; distance: number | null }> = hotelsWithDistance;
   if (sortBy === 'distance') {
-    sortedHotels = sortHotelsByDistance(hotelsWithDistance);
+    const direction = reversed ? -1 : 1;
+    sortedHotels = [...hotelsWithDistance].sort((a, b) => {
+      const aDist = a.distance ?? Infinity;
+      const bDist = b.distance ?? Infinity;
+      return (aDist - bDist) * direction;
+    });
   }
 
   const total = sortedHotels.length;
@@ -522,6 +531,7 @@ async function handleNormalSearch(
   filterConditions: SQL | undefined,
   rulesFilter: SQL | undefined,
   sortBy: string | undefined,
+  reversed: boolean,
   offset: number,
   limit: number,
   page: number,
@@ -554,9 +564,9 @@ async function handleNormalSearch(
     return { status: 200 as const, body: { hotels: [], total, page } };
   }
 
-  let orderBy: Record<string, 'asc' | 'desc'> = { createdAt: 'desc' };
+  let orderBy: Record<string, 'asc' | 'desc'> = reversed ? { createdAt: 'asc' } : { createdAt: 'desc' };
   if (sortBy === 'rating') {
-    orderBy = { averageRating: 'desc' };
+    orderBy = reversed ? { averageRating: 'asc' } : { averageRating: 'desc' };
   }
 
   const hotelList = await db.query.hotels.findMany({

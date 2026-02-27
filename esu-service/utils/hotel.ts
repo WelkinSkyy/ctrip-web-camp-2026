@@ -3,7 +3,7 @@ import * as v from 'valibot';
 
 import { hotels, roomTypes } from '../schema.js';
 import type { DbInstance } from './types.js';
-import { RoomTypeWithDiscountSchema, HotelFilterRulesSchema, HotelSortItemSchema } from 'esu-types';
+import { RoomTypeWithDiscountSchema, HotelFilterRulesSchema } from 'esu-types';
 
 export type RoomTypeWithDiscount = v.InferOutput<typeof RoomTypeWithDiscountSchema>;
 
@@ -188,7 +188,6 @@ export const sortHotelsByDistance = <T extends { distance: number | null }>(hote
 };
 
 export type FilterRules = v.InferOutput<typeof HotelFilterRulesSchema>;
-export type SortItem = v.InferOutput<typeof HotelSortItemSchema>;
 
 export const buildRulesFilter = (
   rules: FilterRules,
@@ -240,62 +239,6 @@ export const buildRulesFilter = (
   }
 
   return sql.raw(conditions.join(' AND '));
-};
-
-type SortableHotel = {
-  distance?: number | null | undefined;
-  price?: number;
-  rating?: number;
-  starRating?: number | null;
-  averageRating?: number | null;
-  createdAt?: Date;
-  roomTypes?: Array<Record<string, unknown>> | undefined;
-};
-
-export const sortHotelsByMultipleKeys = <T extends SortableHotel>(
-  hotelsList: T[],
-  sortItems: SortItem[],
-): T[] => {
-  return [...hotelsList].sort((a, b) => {
-    for (const item of sortItems) {
-      let aVal: number | Date | undefined;
-      let bVal: number | Date | undefined;
-
-      switch (item.key) {
-        case 'distance':
-          aVal = a.distance ?? Infinity;
-          bVal = b.distance ?? Infinity;
-          break;
-        case 'price':
-          aVal = a.price ?? Infinity;
-          bVal = b.price ?? Infinity;
-          break;
-        case 'rating':
-        case 'starRating':
-          aVal = a.starRating ?? a.averageRating ?? 0;
-          bVal = b.starRating ?? b.averageRating ?? 0;
-          break;
-        case 'createdAt':
-          aVal = a.createdAt ?? new Date(0);
-          bVal = b.createdAt ?? new Date(0);
-          break;
-        default:
-          continue;
-      }
-
-      let comparison = 0;
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        comparison = aVal - bVal;
-      } else if (aVal instanceof Date && bVal instanceof Date) {
-        comparison = aVal.getTime() - bVal.getTime();
-      }
-
-      if (comparison !== 0) {
-        return item.reverse ? -comparison : comparison;
-      }
-    }
-    return 0;
-  });
 };
 
 export const getHotelMinPrice = (hotel: { roomTypes?: Array<{ discountedPrice?: number | null | undefined }> | undefined }): number => {

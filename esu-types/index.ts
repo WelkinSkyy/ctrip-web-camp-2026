@@ -119,12 +119,6 @@ export const HotelFilterRulesSchema = v.object({
   checkDate: v.optional(v.tuple([v.pipe(v.string(), v.isoDate()), v.pipe(v.string(), v.isoDate())])), // [入住日期, 退房日期]
 });
 
-// 酒店排序项 Schema（用于 sort 对象）
-export const HotelSortItemSchema = v.object({
-  key: v.picklist(['distance', 'price', 'rating', 'starRating', 'createdAt']),
-  reverse: v.optional(v.boolean()),
-});
-
 export const HotelListRequestSchema = v.object({
   keyword: v.optional(v.string()),
   // 旧版参数（向后兼容）
@@ -137,12 +131,11 @@ export const HotelListRequestSchema = v.object({
   userLat: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-90), v.maxValue(90))),
   userLng: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-180), v.maxValue(180))),
   radius: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(0.1), v.maxValue(100))),
-  // 旧版排序方式（向后兼容）
+  // 排序方式
   sortBy: v.optional(v.picklist(['distance', 'price', 'rating', 'createdAt'])),
-  // 新版筛选规则
+  reversed: v.optional(v.union([v.boolean(), v.pipe(v.string(), v.transform((input) => input === 'true'))])),
+  // 筛选规则
   rules: v.optional(HotelFilterRulesSchema),
-  // 新版排序对象
-  sort: v.optional(HotelSortItemSchema),
   page: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
   limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
 });

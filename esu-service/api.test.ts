@@ -1454,9 +1454,9 @@ describe('酒店模块', () => {
       }
     });
 
-    it('sort 对象排序 - 价格升序', async () => {
+    it('sortBy=price - 按价格升序排列', async () => {
       const result = await client.hotels.list({
-        query: { sort: { key: 'price', reverse: false } },
+        query: { sortBy: 'price', reversed: false },
       });
 
       expect(result.status).toBe(200);
@@ -1471,9 +1471,9 @@ describe('酒店模块', () => {
       }
     });
 
-    it('sort 对象排序 - 价格降序', async () => {
+    it('sortBy=price + reversed=true - 按价格降序排列', async () => {
       const result = await client.hotels.list({
-        query: { sort: { key: 'price', reverse: true } },
+        query: { sortBy: 'price', reversed: true },
       });
 
       expect(result.status).toBe(200);
@@ -1488,9 +1488,9 @@ describe('酒店模块', () => {
       }
     });
 
-    it('sort 对象排序 - 评分排序', async () => {
+    it('sortBy=rating - 按评分降序排列', async () => {
       const result = await client.hotels.list({
-        query: { sort: { key: 'rating', reverse: true } },
+        query: { sortBy: 'rating', reversed: false },
       });
 
       expect(result.status).toBe(200);
@@ -1505,9 +1505,9 @@ describe('酒店模块', () => {
       }
     });
 
-    it('sort 对象排序 - 创建时间排序', async () => {
+    it('sortBy=rating + reversed=true - 按评分升序排列', async () => {
       const result = await client.hotels.list({
-        query: { sort: { key: 'createdAt', reverse: true } },
+        query: { sortBy: 'rating', reversed: true },
       });
 
       expect(result.status).toBe(200);
@@ -1515,18 +1515,45 @@ describe('酒店模块', () => {
         for (let i = 1; i < result.body.hotels.length; i++) {
           const prevHotel = result.body.hotels[i - 1]!;
           const currHotel = result.body.hotels[i]!;
-          const prevDate = new Date(prevHotel.createdAt).getTime();
-          const currDate = new Date(currHotel.createdAt).getTime();
-          expect(currDate).toBeLessThanOrEqual(prevDate);
+          const prevRating = Number(prevHotel.averageRating) || 0;
+          const currRating = Number(currHotel.averageRating) || 0;
+          expect(currRating).toBeGreaterThanOrEqual(prevRating);
         }
       }
     });
 
-    it('rules + sort 组合 - 筛选后排序', async () => {
+    it('sortBy=createdAt - 按创建时间降序排列', async () => {
+      const result = await client.hotels.list({
+        query: { sortBy: 'createdAt', reversed: false },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        const dates = result.body.hotels.map((h: HotelWithRelations) => new Date(h.createdAt!).getTime());
+        const isSorted = dates.slice(1).every((d, i) => d <= (dates[i] ?? -Infinity));
+        expect(isSorted).toBe(true);
+      }
+    });
+
+    it('sortBy=createdAt + reversed=true - 按创建时间升序排列', async () => {
+      const result = await client.hotels.list({
+        query: { sortBy: 'createdAt', reversed: true },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        const dates = result.body.hotels.map((h: HotelWithRelations) => new Date(h.createdAt!).getTime());
+        const isSorted = dates.slice(1).every((d, i) => d >= (dates[i] ?? Infinity));
+        expect(isSorted).toBe(true);
+      }
+    });
+
+    it('rules + sortBy 组合 - 筛选后排序', async () => {
       const result = await client.hotels.list({
         query: {
           rules: { starRating: [3, 5] },
-          sort: { key: 'price', reverse: false },
+          sortBy: 'price',
+          reversed: false,
         },
       });
 
