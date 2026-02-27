@@ -32,13 +32,19 @@ export const ErrorResponseSchema = v.object({
   message: v.string(),
 });
 
+// 使用 Valibot 实现泛型错误 Schema
+// 格式：StatusError(400)、StatusError(401) 等
+const BaseErrorSchema = v.object({ message: v.string() });
+
+export const StatusError = <const T extends number>(status: T) => BaseErrorSchema;
+
 // 通用错误响应定义（用于 ts-rest commonResponses）
 export const CommonResponseErrors = {
-  400: ErrorResponseSchema,
-  401: ErrorResponseSchema,
-  403: ErrorResponseSchema,
-  404: ErrorResponseSchema,
-  500: ErrorResponseSchema,
+  400: StatusError(400),
+  401: StatusError(401),
+  403: StatusError(403),
+  404: StatusError(404),
+  500: StatusError(500),
 };
 
 export const vTimestamps = () => ({
@@ -275,6 +281,8 @@ export const usersContract = c.router({
     body: UserRegisterRequestSchema, // Request body: 用户注册数据
     responses: {
       201: UserRegisterResponseSchema, // Response: 新用户基本信息
+      400: StatusError(400), // 参数验证失败
+      500: StatusError(500), // 服务器错误
     },
     summary: '用户注册，选择角色（后端加密password）',
     metadata: { permission: null }, // Permission: 无需认证
@@ -285,6 +293,9 @@ export const usersContract = c.router({
     body: UserLoginRequestSchema, // Request: 登录凭证
     responses: {
       200: UserLoginResponseSchema, // Response: token和用户信息
+      401: StatusError(401), // 用户名或密码错误
+      403: StatusError(403), // 账号已被禁用
+      500: StatusError(500), // 服务器错误
     },
     summary: '用户登录，自动判断角色，返回JWT token',
     metadata: { permission: null },
@@ -294,6 +305,10 @@ export const usersContract = c.router({
     path: '/users/me',
     responses: {
       200: UserResponseSchema, // Response: 当前用户信息
+      400: StatusError(400), // 参数错误
+      403: StatusError(403), // 账号已被禁用
+      404: StatusError(404), // 用户不存在
+      500: StatusError(500), // 服务器错误
     },
     summary: '获取当前登录用户信息（需token）',
     metadata: { permission: ['customer', 'merchant', 'admin'] }, // Permission: 所有角色
@@ -319,6 +334,8 @@ export const hotelsContract = c.router({
     query: HotelListRequestSchema, // Request query: 筛选参数，支持分页
     responses: {
       200: HotelListResponseSchema, // Response: 酒店列表（populate roomTypes，按价格排序）
+      400: StatusError(400), // 参数错误
+      500: StatusError(500), // 服务器错误
     },
     summary: '用户端酒店列表（支持筛选、上滑加载，价格考虑优惠实时计算）',
     metadata: { permission: null },

@@ -17,7 +17,7 @@ type HotelWithRelations = v.InferOutput<typeof HotelWithRelationsSchema>;
 type RoomTypeWithDiscount = v.InferOutput<typeof RoomTypeWithDiscountSchema>;
 
 // 导入真正的路由处理器工厂
-import { createRouter } from './router-factory.js';
+import { createRouter } from './routers/index.js';
 
 // 导入数据库 Schema
 import { users, hotels, roomTypes, promotions, bookings, relations } from './schema.js';

@@ -513,3 +513,17 @@ export const relations = defineRelations(
     },
   }),
 );
+
+// 导出数据库实例类型
+import { drizzle } from 'drizzle-orm/node-postgres';
+import type { PgAsyncTransaction } from 'drizzle-orm/pg-core';
+import { Pool } from 'pg';
+
+const pool = new Pool();
+const db = drizzle({ client: pool, relations });
+export type DbInstance = typeof db;
+
+// 导出事务回调参数类型
+// 使用 PgAsyncTransaction 作为基础类型，与 drizzle 期望的类型匹配
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DbTransaction = PgAsyncTransaction<any, any, any, any>;

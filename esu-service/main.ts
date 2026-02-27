@@ -2,14 +2,14 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
-import fastifyCors from '@fastify/cors'
+import fastifyCors from '@fastify/cors';
 import fastifyPrintRoutes from 'fastify-print-routes';
 // PostgreSQL 连接池
 import { Pool } from 'pg';
 // Drizzle ORM PostgreSQL 驱动
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { relations } from './schema.js';
-import { createRouter } from './router-factory.js';
+import { createRouter } from './routers/index.js';
 
 const app = Fastify({ logger: true });
 
@@ -24,8 +24,8 @@ app.register(fastifyJwt, {
 
 app.register(fastifyCors, {
   origin: '*',
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'], 
-  credentials: true
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
 });
 
 /**
