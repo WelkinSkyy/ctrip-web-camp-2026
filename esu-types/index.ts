@@ -110,20 +110,39 @@ export const PartialHotelSchema = v.partial(HotelSchema);
 
 export const HotelCreateRequestSchema = v.omit(HotelSchema, ['id', 'createdAt', 'updatedAt', 'status', 'deletedAt', 'statusDescription', 'averageRating', 'ratingCount']);
 
+// 酒店筛选规则 Schema（用于 rules 字段）
+export const HotelFilterRulesSchema = v.object({
+  distance: v.optional(v.tuple([v.number(), v.number()])), // [最小距离, 最大距离]（公里）
+  price: v.optional(v.tuple([v.number(), v.number()])), // [最低价格, 最高价格]
+  starRating: v.optional(v.tuple([v.number(), v.number()])), // [最低星级, 最高星级]
+  avarageRating: v.optional(v.tuple([v.number(), v.number()])), // [最低评分, 最高评分]
+  checkDate: v.optional(v.tuple([v.pipe(v.string(), v.isoDate()), v.pipe(v.string(), v.isoDate())])), // [入住日期, 退房日期]
+});
+
+// 酒店排序项 Schema（用于 sort 对象）
+export const HotelSortItemSchema = v.object({
+  key: v.picklist(['distance', 'price', 'rating', 'starRating', 'createdAt']),
+  reverse: v.optional(v.boolean()),
+});
+
 export const HotelListRequestSchema = v.object({
   keyword: v.optional(v.string()),
+  // 旧版参数（向后兼容）
   checkIn: v.optional(v.pipe(v.string(), v.isoDate())),
   checkOut: v.optional(v.pipe(v.string(), v.isoDate())),
-  // 使用 v.string() + v.toNumber() 转换
   starRating: v.optional(v.pipe(v.string(), v.toNumber(), v.integer())),
   facilities: v.optional(v.array(v.string())),
   priceMin: v.optional(v.pipe(v.string(), v.toNumber())),
   priceMax: v.optional(v.pipe(v.string(), v.toNumber())),
-  // 地理位置搜索参数
-  userLat: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-90), v.maxValue(90))), // 用户纬度
-  userLng: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-180), v.maxValue(180))), // 用户经度
-  radius: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(0.1), v.maxValue(100))), // 搜索半径（公里），默认 10km
-  sortBy: v.optional(v.picklist(['distance', 'price', 'rating', 'createdAt'])), // 排序方式
+  userLat: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-90), v.maxValue(90))),
+  userLng: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(-180), v.maxValue(180))),
+  radius: v.optional(v.pipe(v.string(), v.toNumber(), v.minValue(0.1), v.maxValue(100))),
+  // 旧版排序方式（向后兼容）
+  sortBy: v.optional(v.picklist(['distance', 'price', 'rating', 'createdAt'])),
+  // 新版筛选规则
+  rules: v.optional(HotelFilterRulesSchema),
+  // 新版排序对象
+  sort: v.optional(HotelSortItemSchema),
   page: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
   limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1))),
 });

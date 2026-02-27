@@ -12,8 +12,12 @@ import {
   buildFilterConditions,
   applyRoomTypesDiscount,
   sortHotelsByDistance,
+  sortHotelsByMultipleKeys,
+  buildRulesFilter,
+  getHotelMinPrice,
   DEFAULT_SEARCH_RADIUS,
 } from '../utils/hotel.js';
+import type { FilterRules } from '../utils/hotel.js';
 
 type HotelWithRelations = v.InferOutput<typeof HotelWithRelationsSchema>;
 type HotelDetail = v.InferOutput<typeof HotelDetailSchema>;
@@ -56,59 +60,168 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
     },
 
     list: async ({ query }) => {
-      // 直接从 query 提取值，TypeScript 会自动推断类型
       const page = Number(query.page) || 1;
       const limit = Number(query.limit) || 10;
       const offset = (page - 1) * limit;
-      const radius = Number(query.radius) || DEFAULT_SEARCH_RADIUS;
 
       const hasGeoSearch = query.userLat !== undefined && query.userLng !== undefined;
       const userLat = typeof query.userLat === 'number' ? query.userLat : undefined;
       const userLng = typeof query.userLng === 'number' ? query.userLng : undefined;
 
-      // 处理 checkIn/checkOut 可用性筛选
-      let unavailableRoomTypeIds: number[] = [];
-      const checkInVal = query.checkIn;
-      const checkOutVal = query.checkOut;
-      if (checkInVal && checkOutVal) {
-        const checkInDate = String(checkInVal).split('T')[0];
-        const checkOutDate = String(checkOutVal).split('T')[0];
+      const effectiveRadius = query.rules?.distance 
+        ? query.rules.distance[1] 
+        : (query.radius !== undefined ? Number(query.radius) : DEFAULT_SEARCH_RADIUS);
 
-        // 查找在指定日期范围内有预订的房型
+      const rules: FilterRules = {
+        ...query.rules,
+        // radius → distance: [0, radius]
+        // 冲突处理：rules.distance 优先于 query.radius
+        distance: query.rules?.distance ?? (query.radius !== undefined 
+          ? [0, Number(query.radius)] 
+          : undefined),
+        // checkDate: [checkIn, checkOut]
+        // 冲突处理：rules.checkDate 优先于 query.checkIn + query.checkOut
+        checkDate: query.rules?.checkDate ?? (query.checkIn && query.checkOut 
+          ? [query.checkIn, query.checkOut] 
+          : undefined),
+        price: query.rules?.price ?? (query.priceMin !== undefined || query.priceMax !== undefined
+          ? [query.priceMin ?? 0, query.priceMax ?? Infinity]
+          : undefined),
+        starRating: query.rules?.starRating ?? (query.starRating !== undefined ? [query.starRating, query.starRating] : undefined),
+      };
+
+      let unavailableRoomTypeIds: number[] = [];
+      if (rules.checkDate) {
+        const [checkInDate, checkOutDate] = rules.checkDate;
+        const checkInStr = String(checkInDate).split('T')[0];
+        const checkOutStr = String(checkOutDate).split('T')[0];
+
         const bookedRoomTypes = await db.select({ roomTypeId: bookings.roomTypeId }).from(bookings).where(sql`
-            ${bookings.status} IN ('pending', 'confirmed')
-            AND ${bookings.checkIn} < ${checkOutDate}
-            AND ${bookings.checkOut} > ${checkInDate}
-          `);
+          ${bookings.status} IN ('pending', 'confirmed')
+          AND ${bookings.checkIn} < ${checkOutStr}
+          AND ${bookings.checkOut} > ${checkInStr}
+        `);
 
         unavailableRoomTypeIds = bookedRoomTypes.map((b: { roomTypeId: number }) => b.roomTypeId);
       }
 
       const searchFilter = buildSearchFilter(typeof query.keyword === 'string' ? query.keyword : undefined);
       const filterConditions = buildFilterConditions({
-        starRating: typeof query.starRating === 'number' ? query.starRating : undefined,
         facilities: query.facilities,
-        priceMin: typeof query.priceMin === 'number' ? query.priceMin : undefined,
-        priceMax: typeof query.priceMax === 'number' ? query.priceMax : undefined,
         unavailableRoomTypeIds: unavailableRoomTypeIds.length > 0 ? unavailableRoomTypeIds : undefined,
       });
 
-      if (hasGeoSearch && userLat !== undefined && userLng !== undefined) {
-        return handleGeoSearch(
-          db,
-          userLat,
-          userLng,
-          radius,
-          searchFilter,
-          filterConditions,
-          typeof query.sortBy === 'string' ? query.sortBy : undefined,
-          offset,
-          limit,
-          page,
-        );
+      const rulesFilter = buildRulesFilter(rules, hasGeoSearch, userLat, userLng);
+
+      const sortBy = typeof query.sortBy === 'string' ? query.sortBy : undefined;
+
+      const hasEffectiveGeoSearch = hasGeoSearch || (userLat !== undefined && userLng !== undefined);
+      const distanceSql = hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined
+        ? buildGeoDistanceSql(userLat, userLng)
+        : null;
+
+      const baseCondition = buildBaseCondition();
+      const whereClauses: SQL[] = [baseCondition];
+
+      if (searchFilter) {
+        whereClauses.push(searchFilter);
+      }
+      if (filterConditions) {
+        whereClauses.push(filterConditions);
+      }
+      if (rulesFilter) {
+        whereClauses.push(rulesFilter);
       }
 
-      return handleNormalSearch(db, searchFilter, filterConditions, query.sortBy, offset, limit, page);
+      let hotelIdsWithDistance: Array<{ id: number; distance: number | null }> = [];
+
+      if (hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined && distanceSql) {
+        whereClauses.push(sql`${distanceSql} <= ${effectiveRadius}`);
+
+        hotelIdsWithDistance = await db
+          .select({
+            id: hotels.id,
+            distance: sql<number>`${distanceSql}`,
+          })
+          .from(hotels)
+          .where(sql`${sql.join(whereClauses, sql` AND `)}`);
+
+        if (sortBy === 'distance') {
+          hotelIdsWithDistance.sort((a, b) => {
+            const aDist = a.distance ?? Infinity;
+            const bDist = b.distance ?? Infinity;
+            return aDist - bDist;
+          });
+        }
+      } else {
+        const orderByClauses: SQL[] = [];
+
+        if (sortBy && sortBy !== 'price' && sortBy !== 'distance') {
+          let columnName: string = sortBy;
+          if (sortBy === 'rating') {
+            columnName = 'average_rating';
+          } else if (sortBy === 'createdAt') {
+            columnName = 'created_at';
+          }
+          orderByClauses.push(sql`${sql.raw(columnName)} desc`);
+        }
+
+        orderByClauses.push(sql`${hotels.id} desc`);
+
+        const filteredIds = await db
+          .select({ id: hotels.id })
+          .from(hotels)
+          .where(sql`${sql.join(whereClauses, sql` AND `)}`)
+          .orderBy(...orderByClauses);
+
+        hotelIdsWithDistance = filteredIds.map((p: { id: number }) => ({ id: p.id, distance: null }));
+      }
+
+      const total = hotelIdsWithDistance.length;
+      const pageHotels = hotelIdsWithDistance.slice(offset, offset + limit);
+
+      if (pageHotels.length === 0) {
+        return { status: 200 as const, body: { hotels: [], total, page } };
+      }
+
+      const hotelIds = pageHotels.map((h: { id: number }) => h.id);
+      const distanceMap = new Map(pageHotels.map((h: { id: number; distance: number | null }) => [h.id, h.distance]));
+
+      const hotelList = await db.query.hotels.findMany({
+        where: { id: { in: hotelIds } },
+        with: {
+          roomTypes: { where: { deletedAt: { isNull: true } } },
+          promotions: { where: { deletedAt: { isNull: true } } },
+        },
+      });
+
+      const hotelsWithDiscount: HotelWithRelations[] = await Promise.all(
+        hotelList.map(async (hotel: any) => {
+          const roomTypesWithDiscount = await applyRoomTypesDiscount(db, hotel.id, hotel.roomTypes ?? []);
+
+          const hotelWithDistance: HotelWithRelations = {
+            ...hotel,
+            roomTypes: roomTypesWithDiscount,
+            distance: distanceMap.get(hotel.id) ?? undefined,
+          };
+
+          return hotelWithDistance;
+        }),
+      );
+
+      let sortedResult = hotelIds
+        .map((id: number) => hotelsWithDiscount.find((h: any) => h.id === id))
+        .filter((h): h is HotelWithRelations => h !== undefined);
+
+      if (sortBy === 'price') {
+        sortedResult.sort((a, b) => {
+          const priceA = getHotelMinPrice(a);
+          const priceB = getHotelMinPrice(b);
+          return priceA - priceB;
+        });
+      }
+
+      return { status: 200 as const, body: { hotels: sortedResult, total, page } };
     },
 
     get: async ({ params }) => {
@@ -326,6 +439,7 @@ async function handleGeoSearch(
   radius: number,
   searchFilter: SQL | undefined,
   filterConditions: SQL | undefined,
+  rulesFilter: SQL | undefined,
   sortBy: string | undefined,
   offset: number,
   limit: number,
@@ -342,6 +456,10 @@ async function handleGeoSearch(
 
   if (filterConditions) {
     whereClauses.push(filterConditions);
+  }
+
+  if (rulesFilter) {
+    whereClauses.push(rulesFilter);
   }
 
   whereClauses.push(sql`${distanceSql} <= ${radius}`);
@@ -391,17 +509,18 @@ async function handleGeoSearch(
     }),
   );
 
-  const sortedResult = hotelIds
+  let finalSortedResult = hotelIds
     .map((id: number) => hotelsWithDiscount.find((h: any) => h.id === id))
     .filter((h): h is HotelWithRelations => h !== undefined);
 
-  return { status: 200 as const, body: { hotels: sortedResult, total, page } };
+  return { status: 200 as const, body: { hotels: finalSortedResult, total, page } };
 }
 
 async function handleNormalSearch(
   db: DbInstance,
   searchFilter: SQL | undefined,
   filterConditions: SQL | undefined,
+  rulesFilter: SQL | undefined,
   sortBy: string | undefined,
   offset: number,
   limit: number,
@@ -417,6 +536,10 @@ async function handleNormalSearch(
 
   if (filterConditions) {
     whereClauses.push(filterConditions);
+  }
+
+  if (rulesFilter) {
+    whereClauses.push(rulesFilter);
   }
 
   const filteredIds = await db
@@ -453,5 +576,7 @@ async function handleNormalSearch(
     }),
   );
 
-  return { status: 200 as const, body: { hotels: hotelsWithDiscount, total, page } };
+  let sortedResult = hotelsWithDiscount;
+
+  return { status: 200 as const, body: { hotels: sortedResult, total, page } };
 }

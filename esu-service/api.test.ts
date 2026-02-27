@@ -1369,6 +1369,476 @@ describe('酒店模块', () => {
         });
       }
     });
+
+    // 新功能测试：rules 筛选和 sort 数组排序
+    it('rules.price 筛选 - 价格区间筛选', async () => {
+      const result = await client.hotels.list({
+        query: { rules: { price: [0, 10000] } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          const minPrice = Math.min(...(hotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          expect(minPrice).toBeGreaterThanOrEqual(0);
+          expect(minPrice).toBeLessThanOrEqual(10000);
+        });
+      }
+    });
+
+    it('rules.starRating 筛选 - 星级区间筛选', async () => {
+      await db
+        .update(hotels)
+        .set({ starRating: 4 })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: { rules: { starRating: [3, 5] } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.starRating).toBeGreaterThanOrEqual(3);
+          expect(hotel.starRating).toBeLessThanOrEqual(5);
+        });
+      }
+    });
+
+    it('rules.avarageRating 筛选 - 评分区间筛选', async () => {
+      await db
+        .update(hotels)
+        .set({ averageRating: 4.5, ratingCount: 10 })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: { rules: { avarageRating: [4.0, 5.0] } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(Number(hotel.averageRating)).toBeGreaterThanOrEqual(4.0);
+          expect(Number(hotel.averageRating)).toBeLessThanOrEqual(5.0);
+        });
+      }
+    });
+
+    it('rules 组合筛选 - 多条件', async () => {
+      await db
+        .update(hotels)
+        .set({ averageRating: 4.5, ratingCount: 10 })
+        .where(eq(hotels.id, testData.hotel.id));
+
+      const result = await client.hotels.list({
+        query: {
+          rules: {
+            starRating: [3, 5],
+            avarageRating: [4.0, 5.0],
+          },
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.starRating).toBeGreaterThanOrEqual(3);
+          expect(hotel.starRating).toBeLessThanOrEqual(5);
+        });
+        const hotelsWithRating = result.body.hotels.filter((h: HotelWithRelations) => h.averageRating !== null);
+        if (hotelsWithRating.length > 0) {
+          hotelsWithRating.forEach((hotel: HotelWithRelations) => {
+            expect(Number(hotel.averageRating)).toBeGreaterThanOrEqual(4.0);
+          });
+        }
+      }
+    });
+
+    it('sort 对象排序 - 价格升序', async () => {
+      const result = await client.hotels.list({
+        query: { sort: { key: 'price', reverse: false } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevHotel = result.body.hotels[i - 1]!;
+          const currHotel = result.body.hotels[i]!;
+          const prevPrice = Math.min(...(prevHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          const currPrice = Math.min(...(currHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          expect(currPrice).toBeGreaterThanOrEqual(prevPrice);
+        }
+      }
+    });
+
+    it('sort 对象排序 - 价格降序', async () => {
+      const result = await client.hotels.list({
+        query: { sort: { key: 'price', reverse: true } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevHotel = result.body.hotels[i - 1]!;
+          const currHotel = result.body.hotels[i]!;
+          const prevPrice = Math.min(...(prevHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          const currPrice = Math.min(...(currHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          expect(currPrice).toBeLessThanOrEqual(prevPrice);
+        }
+      }
+    });
+
+    it('sort 对象排序 - 评分排序', async () => {
+      const result = await client.hotels.list({
+        query: { sort: { key: 'rating', reverse: true } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevHotel = result.body.hotels[i - 1]!;
+          const currHotel = result.body.hotels[i]!;
+          const prevRating = Number(prevHotel.averageRating) || 0;
+          const currRating = Number(currHotel.averageRating) || 0;
+          expect(currRating).toBeLessThanOrEqual(prevRating);
+        }
+      }
+    });
+
+    it('sort 对象排序 - 创建时间排序', async () => {
+      const result = await client.hotels.list({
+        query: { sort: { key: 'createdAt', reverse: true } },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevHotel = result.body.hotels[i - 1]!;
+          const currHotel = result.body.hotels[i]!;
+          const prevDate = new Date(prevHotel.createdAt).getTime();
+          const currDate = new Date(currHotel.createdAt).getTime();
+          expect(currDate).toBeLessThanOrEqual(prevDate);
+        }
+      }
+    });
+
+    it('rules + sort 组合 - 筛选后排序', async () => {
+      const result = await client.hotels.list({
+        query: {
+          rules: { starRating: [3, 5] },
+          sort: { key: 'price', reverse: false },
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.starRating).toBeGreaterThanOrEqual(3);
+          expect(hotel.starRating).toBeLessThanOrEqual(5);
+        });
+        if (result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevHotel = result.body.hotels[i - 1]!;
+            const currHotel = result.body.hotels[i]!;
+            const prevPrice = Math.min(...(prevHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            const currPrice = Math.min(...(currHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            expect(currPrice).toBeGreaterThanOrEqual(prevPrice);
+          }
+        }
+      }
+    });
+
+    it('rules.distance 筛选 - 地理搜索时按距离区间筛选', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '100',
+          rules: { distance: [0, 50] },
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeDefined();
+          expect(hotel.distance).toBeGreaterThanOrEqual(0);
+          expect(hotel.distance).toBeLessThanOrEqual(50);
+        });
+      }
+    });
+
+    describe('sortBy 排序功能', () => {
+      it('sortBy=distance - 地理搜索时按距离排序', async () => {
+        const result = await client.hotels.list({
+          query: {
+            userLat: '39.9042',
+            userLng: '116.4074',
+            sortBy: 'distance',
+          },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevDist = result.body.hotels[i - 1]!.distance ?? Infinity;
+            const currDist = result.body.hotels[i]!.distance ?? Infinity;
+            expect(currDist).toBeGreaterThanOrEqual(prevDist);
+          }
+        }
+      });
+
+      it('sortBy=price - 按价格升序排列', async () => {
+        const result = await client.hotels.list({
+          query: { sortBy: 'price' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevHotel = result.body.hotels[i - 1]!;
+            const currHotel = result.body.hotels[i]!;
+            const prevPrice = Math.min(...(prevHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            const currPrice = Math.min(...(currHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            expect(currPrice).toBeGreaterThanOrEqual(prevPrice);
+          }
+        }
+      });
+
+      it('sortBy=rating - 按评分降序排列', async () => {
+        const result = await client.hotels.list({
+          query: { sortBy: 'rating' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevHotel = result.body.hotels[i - 1]!;
+            const currHotel = result.body.hotels[i]!;
+            const prevRating = Number(prevHotel.averageRating) || 0;
+            const currRating = Number(currHotel.averageRating) || 0;
+            expect(currRating).toBeLessThanOrEqual(prevRating);
+          }
+        }
+      });
+
+      it('sortBy=createdAt - 按创建时间降序排列', async () => {
+        const result = await client.hotels.list({
+          query: { sortBy: 'createdAt' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          const dates = result.body.hotels.map((h: HotelWithRelations) => new Date(h.createdAt!).getTime());
+          const isSorted = dates.slice(1).every((d, i) => d <= (dates[i] ?? -Infinity));
+          expect(isSorted).toBe(true);
+        }
+      });
+
+      it('sortBy + keyword - 关键词搜索 + 评分排序', async () => {
+        const result = await client.hotels.list({
+          query: { keyword: '北京', sortBy: 'rating' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevHotel = result.body.hotels[i - 1]!;
+            const currHotel = result.body.hotels[i]!;
+            const prevRating = Number(prevHotel.averageRating) || 0;
+            const currRating = Number(currHotel.averageRating) || 0;
+            expect(currRating).toBeLessThanOrEqual(prevRating);
+          }
+        }
+      });
+
+      it('sortBy + rules.price - 价格筛选 + 价格排序', async () => {
+        const result = await client.hotels.list({
+          query: { rules: { price: [100, 1000] }, sortBy: 'price' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevHotel = result.body.hotels[i - 1]!;
+            const currHotel = result.body.hotels[i]!;
+            const prevPrice = Math.min(...(prevHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            const currPrice = Math.min(...(currHotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+            expect(currPrice).toBeGreaterThanOrEqual(prevPrice);
+          }
+        }
+      });
+
+      it('sortBy + rules.starRating - 星级筛选 + 评分排序', async () => {
+        const result = await client.hotels.list({
+          query: { rules: { starRating: [3, 5] }, sortBy: 'rating' },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200) {
+          result.body.hotels.forEach((hotel: HotelWithRelations) => {
+            expect(hotel.starRating).toBeGreaterThanOrEqual(3);
+            expect(hotel.starRating).toBeLessThanOrEqual(5);
+          });
+        }
+      });
+
+      it('sortBy + 地理搜索 + keyword', async () => {
+        const result = await client.hotels.list({
+          query: {
+            keyword: '北京',
+            userLat: '39.9042',
+            userLng: '116.4074',
+            sortBy: 'distance',
+          },
+        });
+
+        expect(result.status).toBe(200);
+        if (result.status === 200 && result.body.hotels.length > 1) {
+          for (let i = 1; i < result.body.hotels.length; i++) {
+            const prevDist = result.body.hotels[i - 1]!.distance ?? Infinity;
+            const currDist = result.body.hotels[i]!.distance ?? Infinity;
+            expect(currDist).toBeGreaterThanOrEqual(prevDist);
+          }
+        }
+      });
+    });
+
+    it('向后兼容 - 旧版 sortBy 参数仍然可用', async () => {
+      const result = await client.hotels.list({
+        query: { sortBy: 'rating' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevHotel = result.body.hotels[i - 1]!;
+          const currHotel = result.body.hotels[i]!;
+          const prevRating = Number(prevHotel.averageRating) || 0;
+          const currRating = Number(currHotel.averageRating) || 0;
+          expect(currRating).toBeLessThanOrEqual(prevRating);
+        }
+      }
+    });
+
+    it('rules.distance - 指定距离范围筛选', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          rules: { distance: [0, 50] },
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeDefined();
+          expect(hotel.distance).toBeLessThanOrEqual(50);
+        });
+      }
+    });
+
+    it('rules.checkDate - 入住日期筛选', async () => {
+      const result = await client.hotels.list({
+        query: {
+          rules: { checkDate: ['2025-03-01', '2025-03-05'] },
+        },
+      });
+
+      expect(result.status).toBe(200);
+    });
+
+    it('向后兼容 - 旧版 radius 参数降级到 distance', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '30',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeDefined();
+          expect(hotel.distance).toBeLessThanOrEqual(30);
+        });
+      }
+    });
+
+    it('向后兼容 - 旧版 checkIn/checkOut 参数降级到 checkDate', async () => {
+      const result = await client.hotels.list({
+        query: { checkIn: '2025-03-01', checkOut: '2025-03-05' },
+      });
+
+      expect(result.status).toBe(200);
+    });
+
+    it('冲突处理 - rules.distance 优先于 query.radius', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '100',
+          rules: { distance: [0, 20] },
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeDefined();
+          expect(hotel.distance).toBeLessThanOrEqual(20);
+        });
+      }
+    });
+
+    it('冲突处理 - rules.checkDate 优先于 query.checkIn/checkOut', async () => {
+      const result = await client.hotels.list({
+        query: {
+          checkIn: '2025-01-01',
+          checkOut: '2025-01-05',
+          rules: { checkDate: ['2025-03-01', '2025-03-05'] },
+        },
+      });
+
+      expect(result.status).toBe(200);
+    });
+
+    it('向后兼容 - 旧版 priceMin/priceMax 参数降级到 rules', async () => {
+      const result = await client.hotels.list({
+        query: { priceMin: '100', priceMax: '500' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          const minPrice = Math.min(...(hotel.roomTypes?.map((rt) => Number(rt.price)) ?? [Infinity]));
+          expect(minPrice).toBeGreaterThanOrEqual(100);
+          expect(minPrice).toBeLessThanOrEqual(500);
+        });
+      }
+    });
+
+    it('地理搜索自动按距离排序 - 从近到远', async () => {
+      const result = await client.hotels.list({
+        query: {
+          userLat: '39.9042',
+          userLng: '116.4074',
+          radius: '100',
+        },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 1) {
+        for (let i = 1; i < result.body.hotels.length; i++) {
+          const prevDist = result.body.hotels[i - 1]!.distance ?? Infinity;
+          const currDist = result.body.hotels[i]!.distance ?? Infinity;
+          expect(currDist).toBeGreaterThanOrEqual(prevDist);
+        }
+      }
+    });
   });
 
   describe('GET /hotels/:id', () => {
