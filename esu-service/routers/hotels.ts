@@ -1,10 +1,9 @@
-import { SQL, sql } from 'drizzle-orm';
+import { SQL, sql, and } from 'drizzle-orm';
 import * as v from 'valibot';
 
 import { hotelsContract, HotelWithRelationsSchema, HotelDetailSchema, RoomTypeWithDiscountSchema } from 'esu-types';
-import { hotels, roomTypes, promotions, bookings } from '../schema.js';
+import { hotels, roomTypes, promotions } from '../schema.js';
 import type { DbInstance } from '../utils/index.js';
-import { checkPermission, errorResponse } from '../utils/permissions.js';
 import {
   buildSearchFilter,
   buildGeoDistanceSql,
@@ -14,9 +13,17 @@ import {
   sortHotelsByDistance,
   buildRulesFilter,
   getHotelMinPrice,
+  normalizeLegacyParams,
   DEFAULT_SEARCH_RADIUS,
 } from '../utils/hotel.js';
-import type { FilterRules } from '../utils/hotel.js';
+import type {
+  HotelDistanceResult,
+  HotelQueryResult,
+  HotelQueryPromotion,
+  HotelQueryRoomType,
+  DrizzleCondition,
+} from '../utils/hotel.js';
+import { checkPermission, errorResponse } from '../utils/permissions.js';
 
 type HotelWithRelations = v.InferOutput<typeof HotelWithRelationsSchema>;
 type HotelDetail = v.InferOutput<typeof HotelDetailSchema>;
@@ -67,56 +74,23 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
       const userLat = typeof query.userLat === 'number' ? query.userLat : undefined;
       const userLng = typeof query.userLng === 'number' ? query.userLng : undefined;
 
-      const effectiveRadius = query.rules?.distance
-        ? query.rules.distance[1]
-        : query.radius !== undefined
-          ? Number(query.radius)
-          : DEFAULT_SEARCH_RADIUS;
-
-      const rules: FilterRules = {
-        ...query.rules,
-        // radius → distance: [0, radius]
-        // 冲突处理：rules.distance 优先于 query.radius
-        distance: query.rules?.distance ?? (query.radius !== undefined ? [0, Number(query.radius)] : undefined),
-        // checkDate: [checkIn, checkOut]
-        // 冲突处理：rules.checkDate 优先于 query.checkIn + query.checkOut
-        checkDate:
-          query.rules?.checkDate ?? (query.checkIn && query.checkOut ? [query.checkIn, query.checkOut] : undefined),
-        price:
-          query.rules?.price ??
-          (query.priceMin !== undefined || query.priceMax !== undefined
-            ? [query.priceMin ?? 0, query.priceMax ?? Infinity]
-            : undefined),
-        starRating:
-          query.rules?.starRating ??
-          (query.starRating !== undefined ? [query.starRating, query.starRating] : undefined),
-      };
-
-      let unavailableRoomTypeIds: number[] = [];
-      if (rules.checkDate) {
-        const [checkInDate, checkOutDate] = rules.checkDate;
-        const checkInStr = String(checkInDate).split('T')[0];
-        const checkOutStr = String(checkOutDate).split('T')[0];
-
-        const bookedRoomTypes = await db.select({ roomTypeId: bookings.roomTypeId }).from(bookings).where(sql`
-          ${bookings.status} IN ('pending', 'confirmed')
-          AND ${bookings.checkIn} < ${checkOutStr}
-          AND ${bookings.checkOut} > ${checkInStr}
-        `);
-
-        unavailableRoomTypeIds = bookedRoomTypes.map((b: { roomTypeId: number }) => b.roomTypeId);
-      }
-
-      const searchFilter = buildSearchFilter(typeof query.keyword === 'string' ? query.keyword : undefined);
-      const filterConditions = buildFilterConditions({
-        facilities: query.facilities,
-        unavailableRoomTypeIds: unavailableRoomTypeIds.length > 0 ? unavailableRoomTypeIds : undefined,
+      const { rules, sortBy, reversed } = normalizeLegacyParams({
+        ...query,
+        sortBy: query.sortBy,
       });
 
-      const rulesFilter = buildRulesFilter(rules, hasGeoSearch, userLat, userLng);
+      const maxRadius = rules.distance?.[1] ?? DEFAULT_SEARCH_RADIUS;
+      const minRadius = rules.distance?.[0];
 
-      const sortBy = typeof query.sortBy === 'string' ? query.sortBy : undefined;
-      const reversed = query.reversed ?? false;
+      const searchFilter = buildSearchFilter(typeof query.keyword === 'string' ? query.keyword : undefined);
+
+      let checkDateParam: [string, string] | undefined;
+      if (rules.checkDate) {
+        const [checkInDate, checkOutDate] = rules.checkDate;
+        const checkInStr = String(checkInDate).split('T')[0] ?? '';
+        const checkOutStr = String(checkOutDate).split('T')[0] ?? '';
+        checkDateParam = [checkInStr, checkOutStr];
+      }
 
       const hasEffectiveGeoSearch = hasGeoSearch || (userLat !== undefined && userLng !== undefined);
       const distanceSql =
@@ -125,43 +99,65 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
           : null;
 
       const baseCondition = buildBaseCondition();
-      const whereClauses: SQL[] = [baseCondition];
+      const filterConditions = buildFilterConditions({
+        facilities: query.facilities,
+        checkDate: checkDateParam,
+      });
+      const rulesFilterResult = buildRulesFilter(rules, hasGeoSearch, userLat, userLng);
 
+      let finalCondition: DrizzleCondition = baseCondition;
       if (searchFilter) {
-        whereClauses.push(searchFilter);
+        finalCondition = and(finalCondition, searchFilter as DrizzleCondition);
       }
       if (filterConditions) {
-        whereClauses.push(filterConditions);
+        finalCondition = and(finalCondition, filterConditions);
       }
-      if (rulesFilter) {
-        whereClauses.push(rulesFilter);
+      if (rulesFilterResult) {
+        finalCondition = and(finalCondition, rulesFilterResult);
       }
 
       let hotelIdsWithDistance: Array<{ id: number; distance: number | null }> = [];
 
-      if (hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined && distanceSql) {
-        whereClauses.push(sql`${distanceSql} <= ${effectiveRadius}`);
+      const minPriceSubquery = sql`(SELECT MIN(rt.price) FROM room_types rt WHERE rt.hotel_id = hotels.id AND rt.deleted_at IS NULL)`;
 
-        hotelIdsWithDistance = await db
+      if (hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined && distanceSql) {
+        let geoCondition = finalCondition;
+        if (minRadius !== undefined && minRadius > 0) {
+          geoCondition = and(geoCondition, sql`${distanceSql} >= ${minRadius}` as DrizzleCondition);
+        }
+        geoCondition = and(geoCondition, sql`${distanceSql} <= ${maxRadius}` as DrizzleCondition);
+
+        const baseQuery = db
           .select({
             id: hotels.id,
-            distance: sql<number>`${distanceSql}`,
+            distance: distanceSql,
+            minPrice: minPriceSubquery,
           })
           .from(hotels)
-          .where(sql`${sql.join(whereClauses, sql` AND `)}`);
+          .where(geoCondition);
 
-        if (sortBy === 'distance') {
-          const direction = reversed ? -1 : 1;
-          hotelIdsWithDistance.sort((a, b) => {
-            const aDist = a.distance ?? Infinity;
-            const bDist = b.distance ?? Infinity;
-            return (aDist - bDist) * direction;
-          });
+        let distanceQuery =
+          sortBy === 'distance'
+            ? baseQuery.orderBy(reversed ? sql`${distanceSql} DESC` : sql`${distanceSql} ASC`)
+            : sortBy === 'price'
+              ? baseQuery.orderBy(reversed ? sql`${minPriceSubquery} DESC` : sql`${minPriceSubquery} ASC`)
+              : baseQuery;
+
+        try {
+          const result = (await distanceQuery) as HotelDistanceResult[];
+          hotelIdsWithDistance = result.map((h: HotelDistanceResult) => ({
+            id: h.id,
+            distance: h.distance,
+          }));
+        } catch (e: unknown) {
+          hotelIdsWithDistance = [];
         }
       } else {
         const orderByClauses: SQL[] = [];
 
-        if (sortBy && sortBy !== 'price' && sortBy !== 'distance') {
+        if (sortBy === 'price') {
+          orderByClauses.push(reversed ? sql`${minPriceSubquery} DESC` : sql`${minPriceSubquery} ASC`);
+        } else if (sortBy && sortBy !== 'distance') {
           let columnName: string = sortBy;
           if (sortBy === 'rating') {
             columnName = 'average_rating';
@@ -175,9 +171,12 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
         orderByClauses.push(sql`${hotels.id} desc`);
 
         const filteredIds = await db
-          .select({ id: hotels.id })
+          .select({
+            id: hotels.id,
+            minPrice: minPriceSubquery,
+          })
           .from(hotels)
-          .where(sql`${sql.join(whereClauses, sql` AND `)}`)
+          .where(finalCondition)
           .orderBy(...orderByClauses);
 
         hotelIdsWithDistance = filteredIds.map((p: { id: number }) => ({ id: p.id, distance: null }));
@@ -193,6 +192,8 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
       const hotelIds = pageHotels.map((h: { id: number }) => h.id);
       const distanceMap = new Map(pageHotels.map((h: { id: number; distance: number | null }) => [h.id, h.distance]));
 
+      const todayStr = new Date().toISOString().split('T')[0] ?? '';
+
       const hotelList = await db.query.hotels.findMany({
         where: { id: { in: hotelIds } },
         with: {
@@ -201,32 +202,43 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
         },
       });
 
-      const hotelsWithDiscount: HotelWithRelations[] = await Promise.all(
-        hotelList.map(async (hotel: any) => {
-          const roomTypesWithDiscount = await applyRoomTypesDiscount(db, hotel.id, hotel.roomTypes ?? []);
+      const hotelsWithDiscount: HotelWithRelations[] = hotelList.map((hotel: HotelQueryResult) => {
+        const hotelPromos = (hotel.promotions ?? []).filter((p: HotelQueryPromotion) => {
+          if (p.startDate > todayStr || p.endDate < todayStr) return false;
+          if (p.hotelId !== null && p.hotelId !== hotel.id) return false;
+          return true;
+        });
 
-          const hotelWithDistance: HotelWithRelations = {
-            ...hotel,
-            roomTypes: roomTypesWithDiscount,
-            distance: distanceMap.get(hotel.id) ?? undefined,
-          };
+        const roomTypesWithDiscount = (hotel.roomTypes ?? []).map((rt: HotelQueryRoomType) => {
+          let price = Number(rt.price);
+          const roomTypePromos = hotelPromos.filter(
+            (p: HotelQueryPromotion) => p.roomTypeId === null || p.roomTypeId === rt.id,
+          );
+          for (const promo of roomTypePromos) {
+            const promoValue = Number(promo.value);
+            if (promo.type === 'percentage') {
+              price = price * promoValue;
+            } else if (promo.type === 'direct') {
+              price = price - promoValue;
+            } else if (promo.type === 'spend_and_save') {
+              price = price - promoValue;
+            }
+          }
+          return { ...rt, discountedPrice: Math.max(0, price) };
+        }) as HotelWithRelations['roomTypes'];
 
-          return hotelWithDistance;
-        }),
-      );
+        const hotelWithDistance: HotelWithRelations = {
+          ...(hotel as unknown as HotelWithRelations),
+          roomTypes: roomTypesWithDiscount,
+          distance: distanceMap.get(hotel.id) ?? undefined,
+        };
+
+        return hotelWithDistance;
+      });
 
       let sortedResult = hotelIds
-        .map((id: number) => hotelsWithDiscount.find((h: any) => h.id === id))
+        .map((id: number) => hotelsWithDiscount.find((h: HotelQueryResult) => h.id === id))
         .filter((h): h is HotelWithRelations => h !== undefined);
-
-      if (sortBy === 'price') {
-        const direction = reversed ? -1 : 1;
-        sortedResult.sort((a, b) => {
-          const priceA = getHotelMinPrice(a);
-          const priceB = getHotelMinPrice(b);
-          return (priceA - priceB) * direction;
-        });
-      }
 
       return { status: 200 as const, body: { hotels: sortedResult, total, page } };
     },
@@ -438,159 +450,3 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
     },
   });
 };
-
-async function handleGeoSearch(
-  db: DbInstance,
-  userLat: number,
-  userLng: number,
-  radius: number,
-  searchFilter: SQL | undefined,
-  filterConditions: SQL | undefined,
-  rulesFilter: SQL | undefined,
-  sortBy: string | undefined,
-  reversed: boolean,
-  offset: number,
-  limit: number,
-  page: number,
-) {
-  const distanceSql = buildGeoDistanceSql(userLat, userLng);
-  const baseCondition = buildBaseCondition();
-
-  const whereClauses: SQL[] = [baseCondition];
-
-  if (searchFilter) {
-    whereClauses.push(searchFilter);
-  }
-
-  if (filterConditions) {
-    whereClauses.push(filterConditions);
-  }
-
-  if (rulesFilter) {
-    whereClauses.push(rulesFilter);
-  }
-
-  whereClauses.push(sql`${distanceSql} <= ${radius}`);
-
-  const hotelsWithDistance: Array<{ id: number; distance: number | null }> = await db
-    .select({
-      id: hotels.id,
-      distance: sql<number>`${distanceSql}`,
-    })
-    .from(hotels)
-    .where(sql`${sql.join(whereClauses, sql` AND `)}`);
-
-  let sortedHotels: Array<{ id: number; distance: number | null }> = hotelsWithDistance;
-  if (sortBy === 'distance') {
-    const direction = reversed ? -1 : 1;
-    sortedHotels = [...hotelsWithDistance].sort((a, b) => {
-      const aDist = a.distance ?? Infinity;
-      const bDist = b.distance ?? Infinity;
-      return (aDist - bDist) * direction;
-    });
-  }
-
-  const total = sortedHotels.length;
-  const pageHotels = sortedHotels.slice(offset, offset + limit);
-
-  if (pageHotels.length === 0) {
-    return { status: 200 as const, body: { hotels: [], total, page } };
-  }
-
-  const hotelIds = pageHotels.map((h: { id: number }) => h.id);
-  const distanceMap = new Map(pageHotels.map((h: { id: number; distance: number | null }) => [h.id, h.distance]));
-
-  const hotelList = await db.query.hotels.findMany({
-    where: { id: { in: hotelIds } },
-    with: {
-      roomTypes: { where: { deletedAt: { isNull: true } } },
-      promotions: { where: { deletedAt: { isNull: true } } },
-    },
-  });
-
-  const hotelsWithDiscount = await Promise.all(
-    hotelList.map(async (hotel: any) => {
-      const roomTypesWithDiscount = await applyRoomTypesDiscount(db, hotel.id, hotel.roomTypes ?? []);
-
-      const hotelWithDistance: HotelWithRelations = {
-        ...hotel,
-        roomTypes: roomTypesWithDiscount,
-        distance: distanceMap.get(hotel.id) ?? undefined,
-      };
-
-      return hotelWithDistance;
-    }),
-  );
-
-  let finalSortedResult = hotelIds
-    .map((id: number) => hotelsWithDiscount.find((h: any) => h.id === id))
-    .filter((h): h is HotelWithRelations => h !== undefined);
-
-  return { status: 200 as const, body: { hotels: finalSortedResult, total, page } };
-}
-
-async function handleNormalSearch(
-  db: DbInstance,
-  searchFilter: SQL | undefined,
-  filterConditions: SQL | undefined,
-  rulesFilter: SQL | undefined,
-  sortBy: string | undefined,
-  reversed: boolean,
-  offset: number,
-  limit: number,
-  page: number,
-) {
-  const baseCondition = buildBaseCondition();
-
-  const whereClauses: SQL[] = [baseCondition];
-
-  if (searchFilter) {
-    whereClauses.push(searchFilter);
-  }
-
-  if (filterConditions) {
-    whereClauses.push(filterConditions);
-  }
-
-  if (rulesFilter) {
-    whereClauses.push(rulesFilter);
-  }
-
-  const filteredIds = await db
-    .select({ id: hotels.id })
-    .from(hotels)
-    .where(sql`${sql.join(whereClauses, sql` AND `)}`);
-
-  const total = filteredIds.length;
-  const pageIds = filteredIds.slice(offset, offset + limit).map((p: { id: number }) => p.id);
-
-  if (pageIds.length === 0) {
-    return { status: 200 as const, body: { hotels: [], total, page } };
-  }
-
-  let orderBy: Record<string, 'asc' | 'desc'> = reversed ? { createdAt: 'asc' } : { createdAt: 'desc' };
-  if (sortBy === 'rating') {
-    orderBy = reversed ? { averageRating: 'asc' } : { averageRating: 'desc' };
-  }
-
-  const hotelList = await db.query.hotels.findMany({
-    where: { id: { in: pageIds } },
-    with: {
-      roomTypes: { where: { deletedAt: { isNull: true } } },
-      promotions: { where: { deletedAt: { isNull: true } } },
-    },
-    orderBy,
-  });
-
-  const hotelsWithDiscount: HotelWithRelations[] = await Promise.all(
-    hotelList.map(async (hotel: any) => {
-      const roomTypesWithDiscount = await applyRoomTypesDiscount(db, hotel.id, hotel.roomTypes ?? []);
-
-      return { ...hotel, roomTypes: roomTypesWithDiscount };
-    }),
-  );
-
-  let sortedResult = hotelsWithDiscount;
-
-  return { status: 200 as const, body: { hotels: sortedResult, total, page } };
-}

@@ -12,6 +12,7 @@ import {
   date, // 日期类型
   pgEnum, // PostgreSQL 枚举类型
   doublePrecision, // 双精度浮点数（用于经纬度）
+  index, // 索引定义
 } from 'drizzle-orm/pg-core';
 
 // 导入关系定义函数 - Drizzle beta 版使用 defineRelations
@@ -164,6 +165,12 @@ export const hotels = pgTable('hotels', {
   ...timestamps(),
 });
 
+// 为 hotels 表添加索引（优化排序查询性能）
+export const hotelsStatusIndex = index('idx_hotels_status').on(hotels.status);
+export const hotelsStarRatingIndex = index('idx_hotels_star_rating').on(hotels.starRating);
+export const hotelsAverageRatingIndex = index('idx_hotels_average_rating').on(hotels.averageRating);
+export const hotelsCreatedAtIndex = index('idx_hotels_created_at').on(hotels.createdAt);
+
 /**
  * 房型表 (room_types)
  *
@@ -195,6 +202,9 @@ export const roomTypes = pgTable('room_types', {
   description: text('description'),
   ...timestamps(),
 });
+
+// 为 room_types 表添加索引（优化价格排序查询性能）
+export const roomTypesHotelPriceIndex = index('idx_room_types_hotel_price').on(roomTypes.hotelId, roomTypes.price);
 
 /**
  * 优惠表 (promotions)

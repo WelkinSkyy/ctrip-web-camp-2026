@@ -1,7 +1,7 @@
-import { SQL, sql } from 'drizzle-orm';
+import { SQL, sql, and, eq, isNull, exists, gt, lt, gte, lte, or } from 'drizzle-orm';
 import * as v from 'valibot';
 
-import { hotels, roomTypes } from '../schema.js';
+import { hotels, roomTypes, bookings } from '../schema.js';
 import type { DbInstance } from './types.js';
 import { RoomTypeWithDiscountSchema, HotelFilterRulesSchema } from 'esu-types';
 
@@ -11,14 +11,61 @@ export type Promotion = {
   id: number;
   type: 'direct' | 'percentage' | 'spend_and_save';
   value: number;
+  deletedAt?: string | null;
+  startDate: string;
+  endDate: string;
+  hotelId: number | null;
+  roomTypeId?: number | null;
 };
+
+type PromoInfo = {
+  id: number;
+  type: 'direct' | 'percentage' | 'spend_and_save';
+  value: number;
+};
+
+const PROMO_TYPES = ['direct', 'percentage', 'spend_and_save'] as const;
+
+function toPromoType(value: string): PromoInfo['type'] {
+  if ((PROMO_TYPES as readonly string[]).includes(value)) {
+    return value as PromoInfo['type'];
+  }
+  return 'direct';
+}
+
+export interface HotelDistanceResult {
+  id: number;
+  distance: number | null;
+  minPrice?: number | null;
+}
+
+export interface HotelQueryRoomType {
+  id: number;
+  price: number;
+}
+
+export interface HotelQueryPromotion {
+  id: number;
+  hotelId: number | null;
+  roomTypeId: number | null;
+  type: string;
+  value: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface HotelQueryResult {
+  id: number;
+  roomTypes?: HotelQueryRoomType[] | undefined;
+  promotions?: HotelQueryPromotion[] | undefined;
+}
 
 const DEFAULT_RADIUS = 10;
 const EARTH_RADIUS_KM = 6371;
 
 export const DEFAULT_SEARCH_RADIUS = DEFAULT_RADIUS;
 
-export const calculateDiscountedPrice = (originalPrice: number, promotion: Promotion): number => {
+export const calculateDiscountedPrice = (originalPrice: number, promotion: PromoInfo): number => {
   const value = Number(promotion.value);
   switch (promotion.type) {
     case 'percentage':
@@ -36,7 +83,7 @@ export const getActivePromotions = async (
   db: DbInstance,
   hotelId: number,
   roomTypeId?: number,
-): Promise<Promotion[]> => {
+): Promise<PromoInfo[]> => {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0] ?? '';
 
@@ -53,7 +100,7 @@ export const getActivePromotions = async (
 
   return validPromotions.map((p) => ({
     id: p.id,
-    type: p.type as Promotion['type'],
+    type: toPromoType(p.type),
     value: Number(p.value),
   }));
 };
@@ -88,7 +135,7 @@ export const buildSearchFilter = (keyword: string | undefined): SQL | undefined 
 
 export const buildGeoDistanceSql = (userLat: number, userLng: number): SQL => {
   return sql`
-    (${EARTH_RADIUS_KM} * acos(
+    (${sql.raw(String(EARTH_RADIUS_KM))} * acos(
       LEAST(1.0, GREATEST(-1.0,
         cos(radians(${userLat})) * cos(radians(${hotels.latitude})) *
         cos(radians(${hotels.longitude}) - radians(${userLng})) +
@@ -98,11 +145,10 @@ export const buildGeoDistanceSql = (userLat: number, userLng: number): SQL => {
   `;
 };
 
-export const buildBaseCondition = (): SQL => {
-  return sql`
-    ${hotels.deletedAt} IS NULL
-    AND ${hotels.status} = 'approved'
-  `;
+export type DrizzleCondition = ReturnType<typeof and> | ReturnType<typeof eq> | undefined;
+
+export const buildBaseCondition = (): DrizzleCondition => {
+  return and(isNull(hotels.deletedAt), eq(hotels.status, 'approved'));
 };
 
 export const buildFilterConditions = (query: {
@@ -110,17 +156,17 @@ export const buildFilterConditions = (query: {
   facilities?: string[] | undefined;
   priceMin?: number | undefined;
   priceMax?: number | undefined;
-  unavailableRoomTypeIds?: number[] | undefined;
-}): SQL | undefined => {
-  const conditions: string[] = [];
+  checkDate?: [string, string] | undefined;
+}): DrizzleCondition => {
+  const conditions: (ReturnType<typeof and> | undefined)[] = [];
 
   if (query.starRating !== undefined) {
-    conditions.push(`star_rating = ${query.starRating}`);
+    conditions.push(eq(hotels.starRating, query.starRating));
   }
 
   if (query.facilities && query.facilities.length > 0) {
-    const facStr = query.facilities.map((f) => `'${f}'`).join(', ');
-    conditions.push(`facilities && ARRAY[${facStr}]`);
+    const facArray = query.facilities;
+    conditions.push(sql`${hotels.facilities} && ${sql`{${facArray.join(',')}}`}::text[]` as ReturnType<typeof and>);
   }
 
   if (query.priceMin !== undefined || query.priceMax !== undefined) {
@@ -136,67 +182,156 @@ export const buildFilterConditions = (query: {
       priceCond += ` AND room_types.price <= ${query.priceMax}`;
     }
     priceCond += ')';
-    conditions.push(priceCond);
+    conditions.push(sql.raw(priceCond) as ReturnType<typeof and>);
   }
 
-  // 排除已预订的房型对应的酒店（如果有可用房型）
-  if (query.unavailableRoomTypeIds && query.unavailableRoomTypeIds.length > 0) {
-    const unavailableIds = query.unavailableRoomTypeIds.join(', ');
-    conditions.push(`
+  if (query.checkDate) {
+    const [checkInStr, checkOutStr] = query.checkDate;
+    conditions.push(
+      sql.raw(`
       NOT EXISTS (
-        SELECT 1 FROM room_types rt
+        SELECT 1 FROM bookings b
+        INNER JOIN room_types rt ON b.room_type_id = rt.id
         WHERE rt.hotel_id = hotels.id
         AND rt.deleted_at IS NULL
-        AND rt.id NOT IN (${unavailableIds})
+        AND b.status IN ('pending', 'confirmed')
+        AND b.check_in < '${checkOutStr}'
+        AND b.check_out > '${checkInStr}'
       )
-    `);
+    `) as ReturnType<typeof and>,
+    );
   }
 
-  if (conditions.length === 0) {
+  const validConditions = conditions.filter((c): c is ReturnType<typeof and> => c !== undefined);
+
+  if (validConditions.length === 0) {
     return undefined;
   }
 
-  return sql.raw(conditions.join(' AND '));
+  return and(...validConditions);
 };
 
 export const applyRoomTypesDiscount = async (
   db: DbInstance,
   hotelId: number,
   roomTypesList: Array<{ id: number; price: unknown }>,
+  preloadedPromos?: Promotion[],
 ): Promise<RoomTypeWithDiscount[]> => {
-  return Promise.all(
-    roomTypesList.map(async (rt) => {
-      const activePromos = await getActivePromotions(db, hotelId, rt.id);
-      let discountedPrice = Number(rt.price);
+  let activePromos: PromoInfo[];
 
-      for (const promo of activePromos) {
-        discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
-      }
+  if (preloadedPromos) {
+    const todayStr = new Date().toISOString().split('T')[0] ?? '';
+    activePromos = preloadedPromos
+      .filter((p) => {
+        if (p.deletedAt) return false;
+        if (p.startDate > todayStr || p.endDate < todayStr) return false;
+        if (p.hotelId !== null && p.hotelId !== hotelId) {
+          if (p.hotelId !== null) return false;
+        }
+        return true;
+      })
+      .map((p) => ({
+        id: p.id,
+        type: toPromoType(p.type),
+        value: Number(p.value),
+      }));
+  } else {
+    activePromos = await getActivePromotions(db, hotelId);
+  }
 
-      return {
-        ...rt,
-        discountedPrice: Math.max(0, discountedPrice),
-      } as RoomTypeWithDiscount;
-    }),
-  );
+  return roomTypesList.map((rt) => {
+    let discountedPrice = Number(rt.price);
+    for (const promo of activePromos) {
+      discountedPrice = calculateDiscountedPrice(discountedPrice, promo);
+    }
+    return {
+      ...rt,
+      discountedPrice: Math.max(0, discountedPrice),
+    } as RoomTypeWithDiscount;
+  });
 };
 
 export type SortBy = 'distance' | 'price' | 'rating' | 'createdAt';
 
-export const sortHotelsByDistance = <T extends { distance: number | null }>(hotelsList: T[]): T[] => {
-  return [...hotelsList].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+export type FilterRules = v.InferOutput<typeof HotelFilterRulesSchema>;
+
+export type LegacyQueryParams = {
+  checkIn?: string | undefined;
+  checkOut?: string | undefined;
+  starRating?: number | undefined;
+  priceMin?: number | undefined;
+  priceMax?: number | undefined;
+  radius?: number | undefined;
+  sortBy?: string | undefined;
+  rules?: FilterRules | undefined;
 };
 
-export type FilterRules = v.InferOutput<typeof HotelFilterRulesSchema>;
+export const normalizeLegacyParams = (
+  query: LegacyQueryParams,
+): { rules: FilterRules; sortBy: SortBy | undefined; reversed: boolean } => {
+  const rules: FilterRules = {
+    ...query.rules,
+    distance: query.rules?.distance ?? (query.radius !== undefined ? [0, Number(query.radius)] : undefined),
+    checkDate:
+      query.rules?.checkDate ?? (query.checkIn && query.checkOut ? [query.checkIn, query.checkOut] : undefined),
+    price:
+      query.rules?.price ??
+      (query.priceMin !== undefined || query.priceMax !== undefined
+        ? [query.priceMin ?? 0, query.priceMax ?? Infinity]
+        : undefined),
+    starRating:
+      query.rules?.starRating ?? (query.starRating !== undefined ? [query.starRating, query.starRating] : undefined),
+  };
+
+  const sortBy =
+    query.sortBy === 'distance' || query.sortBy === 'price' || query.sortBy === 'rating' || query.sortBy === 'createdAt'
+      ? (query.sortBy as SortBy)
+      : undefined;
+
+  return { rules, sortBy, reversed: false };
+};
+
+export const buildSortOrder = (sortBy: SortBy | undefined, reversed: boolean, hasGeoSearch: boolean): SQL => {
+  if (!sortBy) {
+    return sql`${sql.raw(hasGeoSearch ? 'distance ASC' : 'created_at DESC')}`;
+  }
+
+  switch (sortBy) {
+    case 'distance':
+      return sql`distance ${reversed ? 'DESC' : 'ASC'}`;
+    case 'price':
+      return sql`min_price ${reversed ? 'DESC' : 'ASC'}`;
+    case 'rating':
+      return sql`average_rating ${reversed ? 'ASC' : 'DESC'}`;
+    case 'createdAt':
+      return sql`created_at ${reversed ? 'ASC' : 'DESC'}`;
+    default:
+      return sql`created_at DESC`;
+  }
+};
 
 export const buildRulesFilter = (
   rules: FilterRules,
   hasGeoSearch: boolean,
   userLat?: number,
   userLng?: number,
-): SQL | undefined => {
-  const conditions: string[] = [];
+): DrizzleCondition => {
+  const conditions: (ReturnType<typeof and> | undefined)[] = [];
 
+  // 距离筛选（必须使用 SQL，因为是复杂计算）
+  if (hasGeoSearch && userLat !== undefined && userLng !== undefined) {
+    if (rules.distance) {
+      const [minDist, maxDist] = rules.distance;
+      if (minDist > 0) {
+        conditions.push(sql`${buildGeoDistanceSql(userLat, userLng)} >= ${minDist}` as ReturnType<typeof and>);
+      }
+      if (maxDist !== Infinity) {
+        conditions.push(sql`${buildGeoDistanceSql(userLat, userLng)} <= ${maxDist}` as ReturnType<typeof and>);
+      }
+    }
+  }
+
+  // 价格筛选（使用 SQL 子查询）
   if (rules.price) {
     const [minPrice, maxPrice] = rules.price;
     let priceCond = `EXISTS (
@@ -211,34 +346,38 @@ export const buildRulesFilter = (
       priceCond += ` AND room_types.price <= ${maxPrice}`;
     }
     priceCond += ')';
-    conditions.push(priceCond);
+    conditions.push(sql.raw(priceCond) as ReturnType<typeof and>);
   }
 
+  // 星级筛选（使用 Drizzle）
   if (rules.starRating) {
     const [minStar, maxStar] = rules.starRating;
     if (minStar > 0) {
-      conditions.push(`star_rating >= ${minStar}`);
+      conditions.push(gte(hotels.starRating, minStar));
     }
     if (maxStar !== Infinity) {
-      conditions.push(`star_rating <= ${maxStar}`);
+      conditions.push(lte(hotels.starRating, maxStar));
     }
   }
 
+  // 评分筛选（使用 Drizzle）
   if (rules.avarageRating) {
     const [minRating, maxRating] = rules.avarageRating;
     if (minRating > 0) {
-      conditions.push(`average_rating >= ${minRating}`);
+      conditions.push(gte(hotels.averageRating, minRating));
     }
     if (maxRating !== Infinity) {
-      conditions.push(`average_rating <= ${maxRating}`);
+      conditions.push(lte(hotels.averageRating, maxRating));
     }
   }
 
-  if (conditions.length === 0) {
+  const validConditions = conditions.filter((c): c is ReturnType<typeof and> => c !== undefined);
+
+  if (validConditions.length === 0) {
     return undefined;
   }
 
-  return sql.raw(conditions.join(' AND '));
+  return and(...validConditions);
 };
 
 export const getHotelMinPrice = (hotel: {
@@ -254,4 +393,16 @@ export const getHotelMinPrice = (hotel: {
     return Infinity;
   }
   return Math.min(...prices);
+};
+
+export const sortHotelsByDistance = (
+  hotels: Array<{ id: number; distance: number | null }>,
+  reversed: boolean = false,
+): Array<{ id: number; distance: number | null }> => {
+  const direction = reversed ? -1 : 1;
+  return [...hotels].sort((a, b) => {
+    const aDist = a.distance ?? Infinity;
+    const bDist = b.distance ?? Infinity;
+    return (aDist - bDist) * direction;
+  });
 };
