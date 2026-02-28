@@ -67,26 +67,29 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
       const userLat = typeof query.userLat === 'number' ? query.userLat : undefined;
       const userLng = typeof query.userLng === 'number' ? query.userLng : undefined;
 
-      const effectiveRadius = query.rules?.distance 
-        ? query.rules.distance[1] 
-        : (query.radius !== undefined ? Number(query.radius) : DEFAULT_SEARCH_RADIUS);
+      const effectiveRadius = query.rules?.distance
+        ? query.rules.distance[1]
+        : query.radius !== undefined
+          ? Number(query.radius)
+          : DEFAULT_SEARCH_RADIUS;
 
       const rules: FilterRules = {
         ...query.rules,
         // radius → distance: [0, radius]
         // 冲突处理：rules.distance 优先于 query.radius
-        distance: query.rules?.distance ?? (query.radius !== undefined 
-          ? [0, Number(query.radius)] 
-          : undefined),
+        distance: query.rules?.distance ?? (query.radius !== undefined ? [0, Number(query.radius)] : undefined),
         // checkDate: [checkIn, checkOut]
         // 冲突处理：rules.checkDate 优先于 query.checkIn + query.checkOut
-        checkDate: query.rules?.checkDate ?? (query.checkIn && query.checkOut 
-          ? [query.checkIn, query.checkOut] 
-          : undefined),
-        price: query.rules?.price ?? (query.priceMin !== undefined || query.priceMax !== undefined
-          ? [query.priceMin ?? 0, query.priceMax ?? Infinity]
-          : undefined),
-        starRating: query.rules?.starRating ?? (query.starRating !== undefined ? [query.starRating, query.starRating] : undefined),
+        checkDate:
+          query.rules?.checkDate ?? (query.checkIn && query.checkOut ? [query.checkIn, query.checkOut] : undefined),
+        price:
+          query.rules?.price ??
+          (query.priceMin !== undefined || query.priceMax !== undefined
+            ? [query.priceMin ?? 0, query.priceMax ?? Infinity]
+            : undefined),
+        starRating:
+          query.rules?.starRating ??
+          (query.starRating !== undefined ? [query.starRating, query.starRating] : undefined),
       };
 
       let unavailableRoomTypeIds: number[] = [];
@@ -116,9 +119,10 @@ export const createHotelsRouter = (s: ReturnType<typeof import('@ts-rest/fastify
       const reversed = query.reversed ?? false;
 
       const hasEffectiveGeoSearch = hasGeoSearch || (userLat !== undefined && userLng !== undefined);
-      const distanceSql = hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined
-        ? buildGeoDistanceSql(userLat, userLng)
-        : null;
+      const distanceSql =
+        hasEffectiveGeoSearch && userLat !== undefined && userLng !== undefined
+          ? buildGeoDistanceSql(userLat, userLng)
+          : null;
 
       const baseCondition = buildBaseCondition();
       const whereClauses: SQL[] = [baseCondition];

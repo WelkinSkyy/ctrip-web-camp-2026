@@ -2,13 +2,13 @@ import { initServer } from '@ts-rest/fastify';
 
 import { contract } from 'esu-types';
 import type { DbInstance } from '../utils/index.js';
-import { createUsersRouter } from './users.router.js';
-import { createHotelsRouter } from './hotels.router.js';
-import { createRoomTypesRouter } from './room-types.router.js';
-import { createPromotionsRouter } from './promotions.router.js';
-import { createBookingsRouter } from './bookings.router.js';
-import { createRatingsRouter } from './ratings.router.js';
-import { createCarouselRouter } from './carousel.router.js';
+import { createUsersRouter } from './users.js';
+import { createHotelsRouter } from './hotels.js';
+import { createRoomTypesRouter } from './room-types.js';
+import { createPromotionsRouter } from './promotions.js';
+import { createBookingsRouter } from './bookings.js';
+import { createRatingsRouter } from './ratings.js';
+import { createCarouselRouter } from './carousel.js';
 
 export const createRouter = (db: DbInstance) => {
   const s = initServer();

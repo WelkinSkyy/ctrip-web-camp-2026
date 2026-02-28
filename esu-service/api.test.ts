@@ -1387,10 +1387,7 @@ describe('酒店模块', () => {
     });
 
     it('rules.starRating 筛选 - 星级区间筛选', async () => {
-      await db
-        .update(hotels)
-        .set({ starRating: 4 })
-        .where(eq(hotels.id, testData.hotel.id));
+      await db.update(hotels).set({ starRating: 4 }).where(eq(hotels.id, testData.hotel.id));
 
       const result = await client.hotels.list({
         query: { rules: { starRating: [3, 5] } },
@@ -1406,10 +1403,7 @@ describe('酒店模块', () => {
     });
 
     it('rules.avarageRating 筛选 - 评分区间筛选', async () => {
-      await db
-        .update(hotels)
-        .set({ averageRating: 4.5, ratingCount: 10 })
-        .where(eq(hotels.id, testData.hotel.id));
+      await db.update(hotels).set({ averageRating: 4.5, ratingCount: 10 }).where(eq(hotels.id, testData.hotel.id));
 
       const result = await client.hotels.list({
         query: { rules: { avarageRating: [4.0, 5.0] } },
@@ -1425,10 +1419,7 @@ describe('酒店模块', () => {
     });
 
     it('rules 组合筛选 - 多条件', async () => {
-      await db
-        .update(hotels)
-        .set({ averageRating: 4.5, ratingCount: 10 })
-        .where(eq(hotels.id, testData.hotel.id));
+      await db.update(hotels).set({ averageRating: 4.5, ratingCount: 10 }).where(eq(hotels.id, testData.hotel.id));
 
       const result = await client.hotels.list({
         query: {

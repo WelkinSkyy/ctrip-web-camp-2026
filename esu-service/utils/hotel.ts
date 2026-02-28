@@ -241,7 +241,9 @@ export const buildRulesFilter = (
   return sql.raw(conditions.join(' AND '));
 };
 
-export const getHotelMinPrice = (hotel: { roomTypes?: Array<{ discountedPrice?: number | null | undefined }> | undefined }): number => {
+export const getHotelMinPrice = (hotel: {
+  roomTypes?: Array<{ discountedPrice?: number | null | undefined }> | undefined;
+}): number => {
   if (!hotel.roomTypes || hotel.roomTypes.length === 0) {
     return Infinity;
   }
