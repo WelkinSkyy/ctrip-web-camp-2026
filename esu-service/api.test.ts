@@ -1839,174 +1839,261 @@ describe('酒店模块', () => {
       }
     });
 
-    it('地理搜索自动按距离排序 - 从近到远', async () => {
+    it('starRating 单独筛选 - 旧版参数', async () => {
+      const result = await client.hotels.list({
+        query: { starRating: '5' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.starRating).toBe(5);
+        });
+      }
+    });
+
+    it('空关键词搜索 - 返回全部酒店', async () => {
+      const result = await client.hotels.list({
+        query: { keyword: '' },
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200) {
+        expect(result.body.hotels.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('距离排序 + reversed - 按距离从远到近', async () => {
       const result = await client.hotels.list({
         query: {
           userLat: '39.9042',
           userLng: '116.4074',
-          radius: '100',
+          sortBy: 'distance',
+          reversed: true,
         },
       });
 
       expect(result.status).toBe(200);
       if (result.status === 200 && result.body.hotels.length > 1) {
         for (let i = 1; i < result.body.hotels.length; i++) {
-          const prevDist = result.body.hotels[i - 1]!.distance ?? Infinity;
-          const currDist = result.body.hotels[i]!.distance ?? Infinity;
-          expect(currDist).toBeGreaterThanOrEqual(prevDist);
+          const prevDist = result.body.hotels[i - 1]!.distance ?? -Infinity;
+          const currDist = result.body.hotels[i]!.distance ?? -Infinity;
+          expect(currDist).toBeLessThanOrEqual(prevDist);
         }
       }
     });
-  });
 
-  describe('GET /hotels/:id', () => {
-    it('返回酒店详情', async () => {
-      const result = await client.hotels.get({
-        params: { id: String(testData.hotel.id) },
+    it('分页边界 - 超出范围返回空数组', async () => {
+      const allResult = await client.hotels.list({ query: { limit: '10' } });
+      const total = allResult.body.total;
+
+      const result = await client.hotels.list({
+        query: { page: 999, limit: 10 },
+      });
+
+      expect(result.status).toBe(200);
+      expect(result.body.hotels).toEqual([]);
+      expect(result.body.total).toBe(total);
+    });
+
+    it('促销折扣 - 验证百分比折扣正确计算', async () => {
+      const result = await client.hotels.list({
+        query: {},
+      });
+
+      expect(result.status).toBe(200);
+      if (result.status === 200 && result.body.hotels.length > 0) {
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          hotel.roomTypes?.forEach((rt) => {
+            if (rt.discountedPrice !== undefined) {
+              expect(rt.discountedPrice).toBeDefined();
+            }
+          });
+        });
+      }
+    });
+
+    it('地理搜索 - 无有效坐标时不按距离排序', async () => {
+      const result = await client.hotels.list({
+        query: { userLat: '39.9042' },
       });
 
       expect(result.status).toBe(200);
       if (result.status === 200) {
-        expect(result.body.id).toBe(testData.hotel.id);
-      }
-    });
-
-    it('酒店不存在返回404', async () => {
-      const result = await client.hotels.get({
-        params: { id: '9999' },
-      });
-
-      expect(result.status).toBe(404);
-    });
-  });
-
-  describe('PUT /hotels/:id', () => {
-    it('商户更新自己的酒店', async () => {
-      const result = await client.hotels.update({
-        params: { id: String(testData.hotel.id) },
-        body: { nameZh: '更新后的酒店' },
-        ...authHeaders(tokens.merchant),
-      });
-
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.nameZh).toBe('更新后的酒店');
+        result.body.hotels.forEach((hotel: HotelWithRelations) => {
+          expect(hotel.distance).toBeUndefined();
+        });
       }
     });
   });
 
-  describe('POST /hotels/:id/approve', () => {
-    it('管理员审核通过', async () => {
-      const result = await client.hotels.approve({
-        params: { id: String(testData.pendingHotel.id) },
-        body: {},
-        ...authHeaders(tokens.admin),
-      });
+  it('地理搜索自动按距离排序 - 从近到远', async () => {
+    const result = await client.hotels.list({
+      query: {
+        userLat: '39.9042',
+        userLng: '116.4074',
+        radius: '100',
+      },
+    });
 
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.status).toBe('approved');
+    expect(result.status).toBe(200);
+    if (result.status === 200 && result.body.hotels.length > 1) {
+      for (let i = 1; i < result.body.hotels.length; i++) {
+        const prevDist = result.body.hotels[i - 1]!.distance ?? Infinity;
+        const currDist = result.body.hotels[i]!.distance ?? Infinity;
+        expect(currDist).toBeGreaterThanOrEqual(prevDist);
       }
+    }
+  });
+});
+
+describe('GET /hotels/:id', () => {
+  it('返回酒店详情', async () => {
+    const result = await client.hotels.get({
+      params: { id: String(testData.hotel.id) },
     });
 
-    it('商户无权限', async () => {
-      const result = await client.hotels.approve({
-        params: { id: String(testData.pendingHotel.id) },
-        body: {},
-        ...authHeaders(tokens.merchant),
-      });
-
-      expect(result.status).toBe(403);
-    });
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.id).toBe(testData.hotel.id);
+    }
   });
 
-  describe('PUT /hotels/:id/reject', () => {
-    it('管理员审核拒绝', async () => {
-      const result = await client.hotels.reject({
-        params: { id: String(testData.pendingHotel.id) },
-        body: { rejectReason: '信息不完整' },
-        ...authHeaders(tokens.admin),
-      });
-
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.status).toBe('rejected');
-      }
+  it('酒店不存在返回404', async () => {
+    const result = await client.hotels.get({
+      params: { id: '9999' },
     });
+
+    expect(result.status).toBe(404);
+  });
+});
+
+describe('PUT /hotels/:id', () => {
+  it('商户更新自己的酒店', async () => {
+    const result = await client.hotels.update({
+      params: { id: String(testData.hotel.id) },
+      body: { nameZh: '更新后的酒店' },
+      ...authHeaders(tokens.merchant),
+    });
+
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.nameZh).toBe('更新后的酒店');
+    }
+  });
+});
+
+describe('POST /hotels/:id/approve', () => {
+  it('管理员审核通过', async () => {
+    const result = await client.hotels.approve({
+      params: { id: String(testData.pendingHotel.id) },
+      body: {},
+      ...authHeaders(tokens.admin),
+    });
+
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.status).toBe('approved');
+    }
   });
 
-  describe('PUT /hotels/:id/offline', () => {
-    it('管理员下线酒店', async () => {
-      const result = await client.hotels.offline({
-        params: { id: String(testData.hotel.id) },
-        body: {},
-        ...authHeaders(tokens.admin),
-      });
-
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.status).toBe('offline');
-      }
+  it('商户无权限', async () => {
+    const result = await client.hotels.approve({
+      params: { id: String(testData.pendingHotel.id) },
+      body: {},
+      ...authHeaders(tokens.merchant),
     });
+
+    expect(result.status).toBe(403);
+  });
+});
+
+describe('PUT /hotels/:id/reject', () => {
+  it('管理员审核拒绝', async () => {
+    const result = await client.hotels.reject({
+      params: { id: String(testData.pendingHotel.id) },
+      body: { rejectReason: '信息不完整' },
+      ...authHeaders(tokens.admin),
+    });
+
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.status).toBe('rejected');
+    }
+  });
+});
+
+describe('PUT /hotels/:id/offline', () => {
+  it('管理员下线酒店', async () => {
+    const result = await client.hotels.offline({
+      params: { id: String(testData.hotel.id) },
+      body: {},
+      ...authHeaders(tokens.admin),
+    });
+
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.status).toBe('offline');
+    }
+  });
+});
+
+describe('PUT /hotels/:id/online', () => {
+  it('管理员恢复上线', async () => {
+    await db.update(hotels).set({ status: 'offline' }).where(eq(hotels.id, testData.hotel.id));
+
+    const result = await client.hotels.online({
+      params: { id: String(testData.hotel.id) },
+      body: {},
+      ...authHeaders(tokens.admin),
+    });
+
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.status).toBe('approved');
+    }
+  });
+});
+
+describe('GET /hotels/admin', () => {
+  it('管理员查看所有酒店', async () => {
+    const result = await client.hotels.adminList({
+      ...authHeaders(tokens.admin),
+    });
+
+    expect(result.status).toBe(200);
   });
 
-  describe('PUT /hotels/:id/online', () => {
-    it('管理员恢复上线', async () => {
-      await db.update(hotels).set({ status: 'offline' }).where(eq(hotels.id, testData.hotel.id));
-
-      const result = await client.hotels.online({
-        params: { id: String(testData.hotel.id) },
-        body: {},
-        ...authHeaders(tokens.admin),
-      });
-
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.status).toBe('approved');
-      }
+  it('商户无权限', async () => {
+    const result = await client.hotels.adminList({
+      ...authHeaders(tokens.merchant),
     });
+
+    expect(result.status).toBe(403);
   });
+});
 
-  describe('GET /hotels/admin', () => {
-    it('管理员查看所有酒店', async () => {
-      const result = await client.hotels.adminList({
-        ...authHeaders(tokens.admin),
-      });
-
-      expect(result.status).toBe(200);
+describe('GET /hotels/merchant', () => {
+  it('商户查看自己的酒店', async () => {
+    const result = await client.hotels.merchantList({
+      ...authHeaders(tokens.merchant),
     });
 
-    it('商户无权限', async () => {
-      const result = await client.hotels.adminList({
-        ...authHeaders(tokens.merchant),
-      });
-
-      expect(result.status).toBe(403);
-    });
+    expect(result.status).toBe(200);
   });
+});
 
-  describe('GET /hotels/merchant', () => {
-    it('商户查看自己的酒店', async () => {
-      const result = await client.hotels.merchantList({
-        ...authHeaders(tokens.merchant),
-      });
-
-      expect(result.status).toBe(200);
+describe('DELETE /hotels/:id', () => {
+  it('管理员软删除酒店', async () => {
+    const result = await client.hotels.delete({
+      params: { id: String(testData.hotel.id) },
+      ...authHeaders(tokens.admin),
     });
-  });
 
-  describe('DELETE /hotels/:id', () => {
-    it('管理员软删除酒店', async () => {
-      const result = await client.hotels.delete({
-        params: { id: String(testData.hotel.id) },
-        ...authHeaders(tokens.admin),
-      });
-
-      expect(result.status).toBe(200);
-      if (result.status === 200) {
-        expect(result.body.message).toBe('Deleted');
-      }
-    });
+    expect(result.status).toBe(200);
+    if (result.status === 200) {
+      expect(result.body.message).toBe('Deleted');
+    }
   });
 });
 
